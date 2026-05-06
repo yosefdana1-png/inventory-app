@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -48,7 +49,7 @@
       --text: #e8ecf4; --text-sec: #8b95a8; --text-muted: #5a6478; --border: #252d3d;
     }
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    html,body{font-family:'Rubik',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;overflow-x:hidden}
+    html,body{font-family:'Rubik',sans-serif;background:var(--bg);color:var(--text);height:100vh;height:100dvh;overflow:hidden}
     @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
     @keyframes scaleIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
     @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
@@ -85,7 +86,7 @@
     .empty-state{text-align:center;padding:60px 20px;color:var(--text-muted)}
     .history-row{padding:10px 0;display:flex;justify-content:space-between;align-items:center}
     .history-row+.history-row{border-top:1px solid var(--border)}
-    .spinning{animation:spin .6s linear}.shaking{animation:shake .5s ease}.screen{animation:fadeIn .3s ease;background:var(--bg);min-height:100vh;min-height:100dvh}
+    .spinning{animation:spin .6s linear}.shaking{animation:shake .5s ease}.screen{background:var(--bg);min-height:100vh;min-height:100dvh;height:100vh;height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch}
     .tab-bar{display:flex;gap:4px;background:var(--surface);border-radius:12px;padding:4px;border:1px solid var(--border);margin-bottom:16px}
     .tab-btn{flex:1;padding:10px;border-radius:10px;border:none;background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;transition:all .2s}
     .tab-btn.active{background:var(--accent);color:#fff}
@@ -103,6 +104,7 @@
     .drag-handle{cursor:grab;touch-action:none;color:var(--text-muted);padding:4px}
     .drag-handle:active{cursor:grabbing}
   </style>
+
 </head>
 <body>
 
@@ -129,7 +131,7 @@
   <symbol id="icon-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></symbol>
 </svg>
 
-<div id="app">
+<div id="app" style="height:100vh;height:100dvh">
   <div style="display:flex;gap:6px;justify-content:center;padding:40vh 0">
     <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out 0s infinite"></div>
     <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out .2s infinite"></div>
@@ -184,9 +186,7 @@ let isShowingDetail=false;
 function navInit(){
   const app=$("#app");
   app.style.position="relative";
-  app.style.overflow="hidden";
   app.style.width="100%";
-  app.style.minHeight="100vh";
 }
 
 function navShowHome(animated){
@@ -312,19 +312,18 @@ function renderHome(){
   cleanup();
   
   if(homeScreen&&cachedHomeContent){
-    // Reuse existing home screen
     currentWhId=null;
     navShowHome(true);
-    // Reattach listener
+    // Reattach warehouse list listener only
     homeUnsubs.forEach(f=>f());homeUnsubs=[];
     const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
       const whIds=data?Object.keys(data):[];
       renderWarehouseList(cachedHomeContent,whIds,homeScreen);
     });
-    homeUnsubs.push(u);unsubscribers.push(u);
+    homeUnsubs.push(u);
     return;
   }
-  const wrap=el("div",{className:"screen",style:{minHeight:"100vh",paddingBottom:"100px"}});
+  const wrap=el("div",{className:"screen",style:{paddingBottom:"100px"}});
   const header=el("div",{className:"header"});
   const hr=el("div");
   hr.appendChild(el("h1",{style:{fontSize:"24px",fontWeight:"700"}},"ניהול מלאי"));
@@ -356,14 +355,15 @@ let currentWhIds=[];
 let whCardListeners=[];
 
 function renderWarehouseList(c,whIds,wrap){
-  // Check if warehouse list changed
   const same=currentWhIds.length===whIds.length&&currentWhIds.every((id,i)=>id===whIds[i]);
-  if(same&&c.querySelector('#warehouseCards'))return; // No change, skip rebuild
+  
+  // If same warehouses and cards already exist, do nothing (cards update themselves via listeners)
+  if(same&&c.querySelector('#warehouseCards'))return;
 
-  // Cleanup old warehouse card listeners
+  // Cleanup old warehouse card listeners only
   whCardListeners.forEach(f=>f());
   whCardListeners=[];
-  currentWhIds=whIds;
+  currentWhIds=[...whIds];
 
   c.innerHTML="";
   if(whIds.length===0){
@@ -376,11 +376,10 @@ function renderWarehouseList(c,whIds,wrap){
   const cardsContainer=el("div",{id:"warehouseCards"});
   c.appendChild(cardsContainer);
 
-  whIds.forEach((whId,i)=>{
+  whIds.forEach((whId)=>{
     const cardWrapper=el("div",{id:`wh-${whId}`,style:{marginBottom:"10px"}});
     cardsContainer.appendChild(cardWrapper);
 
-    // Show cached data immediately
     const cachedWh=cacheGet(`warehouses/${whId}`);
     if(cachedWh)buildWarehouseCard(cardWrapper,whId,cachedWh,wrap);
 
@@ -391,7 +390,6 @@ function renderWarehouseList(c,whIds,wrap){
       buildWarehouseCard(cardWrapper,whId,wh,wrap);
     });
     whCardListeners.push(unsub);
-    unsubscribers.push(unsub);
   });
 }
 
@@ -435,10 +433,12 @@ let searchQuery="";
 let reorderMode=false;
 let currentItems=[];
 let currentWhId=null;
+let dragSrcId=null;
+let touchDrag=null;
 
 function renderListDetail(whId){
   cleanup();currentSort="manual";searchQuery="";reorderMode=false;
-  const wrap=el("div",{className:"screen",style:{minHeight:"100vh",paddingBottom:"100px"}});
+  const wrap=el("div",{className:"screen",style:{paddingBottom:"100px"}});
   const header=el("div",{className:"header"});
   const hr=el("div",{style:{display:"flex",alignItems:"center",gap:"12px"}});
   const bb=el("button",{className:"icon-btn",style:{color:"var(--accent)"},onClick:()=>renderHome()});
@@ -469,9 +469,19 @@ function renderItemsView(c,whId,items,wrap){
   currentItems=items;
   currentWhId=whId;
   // Only build search bar and toolbar once
-  if(!c.querySelector('#searchWrap')){
+  if(!wrap.querySelector('#searchWrap')){
     c.innerHTML="";
-    const searchWrap=el("div",{id:"searchWrap",style:{marginBottom:"12px"}});
+    
+    // Insert search bar directly into wrap, after header, before content — so sticky works
+    const searchWrap=el("div",{id:"searchWrap",style:{
+      position:"sticky",top:"0",zIndex:"50",background:"var(--bg)",
+      padding:"8px 16px 4px 16px"
+    }});
+    // Measure header height after render and adjust top
+    requestAnimationFrame(()=>{
+      const headerEl=wrap.querySelector('.header');
+      if(headerEl)searchWrap.style.top=headerEl.offsetHeight+"px";
+    });
     const searchRow=el("div",{style:{display:"flex",gap:"8px",alignItems:"center"}});
     const searchBar=el("div",{className:"search-bar",style:{flex:"1",position:"relative"}});
     const searchInput=el("input",{className:"app-input",placeholder:"חיפוש פריט...",style:{paddingRight:"40px",paddingLeft:"40px"},id:"searchInput"});
@@ -491,23 +501,69 @@ function renderItemsView(c,whId,items,wrap){
     searchRow.appendChild(searchBar);
     searchRow.appendChild(closeBtn);
     searchWrap.appendChild(searchRow);
-    c.appendChild(searchWrap);
-
-    const toolbar=el("div",{className:"toolbar",id:"toolbar"});
-    const permSortBtn=el("button",{className:"toolbar-btn",onClick:async()=>{
+    
+    // Toolbar inside searchWrap so it sticks too
+    const toolbar=el("div",{className:"toolbar",id:"toolbar",style:{marginTop:"8px"}});
+    
+    // Sort button with dropdown
+    const sortWrap=el("div",{style:{position:"relative"}});
+    const sortBtn=el("button",{className:"toolbar-btn",onClick:()=>{
+      const menu=sortWrap.querySelector('.sort-menu');
+      if(menu)menu.style.display=menu.style.display==="none"?"flex":"none";
+    }});
+    sortBtn.appendChild(icon("sort",14));sortBtn.appendChild(document.createTextNode("סידור"));
+    sortWrap.appendChild(sortBtn);
+    
+    const sortMenu=el("div",{className:"sort-menu",style:{
+      display:"none",position:"absolute",top:"110%",right:"0",background:"var(--surface)",
+      border:"1px solid var(--border)",borderRadius:"12px",padding:"6px",
+      flexDirection:"column",gap:"4px",zIndex:"60",minWidth:"140px",
+      boxShadow:"0 8px 24px rgba(0,0,0,0.4)"
+    }});
+    
+    const sortAlpha=el("button",{className:"toolbar-btn",style:{width:"100%",justifyContent:"flex-start",border:"none"},onClick:async()=>{
+      sortMenu.style.display="none";
       const sorted=[...currentItems].sort((a,b)=>a[1].name.localeCompare(b[1].name,"he"));
       const updates={};
       sorted.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
       await dbUpdate(`warehouses/${currentWhId}`,updates);
     }});
-    permSortBtn.appendChild(icon("sort",14));permSortBtn.appendChild(document.createTextNode("סדר א-ב"));
-    const reorderBtn=el("button",{className:`toolbar-btn`,id:"reorderBtn",onClick:()=>{
+    sortAlpha.appendChild(icon("sort",14));sortAlpha.appendChild(document.createTextNode("לפי א-ב"));
+    
+    const sortQtyDesc=el("button",{className:"toolbar-btn",style:{width:"100%",justifyContent:"flex-start",border:"none"},onClick:async()=>{
+      sortMenu.style.display="none";
+      const sorted=[...currentItems].sort((a,b)=>(b[1].quantity||0)-(a[1].quantity||0));
+      const updates={};
+      sorted.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
+      await dbUpdate(`warehouses/${currentWhId}`,updates);
+    }});
+    sortQtyDesc.appendChild(icon("down",14));sortQtyDesc.appendChild(document.createTextNode("כמות: גבוה לנמוך"));
+    
+    const sortQtyAsc=el("button",{className:"toolbar-btn",style:{width:"100%",justifyContent:"flex-start",border:"none"},onClick:async()=>{
+      sortMenu.style.display="none";
+      const sorted=[...currentItems].sort((a,b)=>(a[1].quantity||0)-(b[1].quantity||0));
+      const updates={};
+      sorted.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
+      await dbUpdate(`warehouses/${currentWhId}`,updates);
+    }});
+    sortQtyAsc.appendChild(icon("up",14));sortQtyAsc.appendChild(document.createTextNode("כמות: נמוך לגבוה"));
+    
+    const sortReorder=el("button",{className:"toolbar-btn",id:"sortReorderBtn",style:{width:"100%",justifyContent:"flex-start",border:"none",borderTop:"1px solid var(--border)",marginTop:"4px",paddingTop:"8px",borderRadius:"0 0 8px 8px"},onClick:()=>{
+      sortMenu.style.display="none";
       reorderMode=!reorderMode;currentSort="manual";
-      reorderBtn.className=`toolbar-btn ${reorderMode?"active":""}`;
-      reorderBtn.lastChild.textContent=reorderMode?"סיום סידור":"שנה סדר";
+      sortReorder.lastChild.textContent=reorderMode?"סיום סידור":"שנה סדר";
+      sortReorder.style.color=reorderMode?"var(--accent)":"";
       renderItemsList(c,currentWhId,currentItems,wrap);
     }});
-    reorderBtn.appendChild(icon("grip",14));reorderBtn.appendChild(document.createTextNode("שנה סדר"));
+    sortReorder.appendChild(icon("grip",14));sortReorder.appendChild(document.createTextNode("שנה סדר"));
+    sortMenu.append(sortAlpha,sortQtyDesc,sortQtyAsc,sortReorder);
+    sortWrap.appendChild(sortMenu);
+
+    // Close sort menu when clicking outside
+    document.addEventListener("click",e=>{
+      if(!sortWrap.contains(e.target))sortMenu.style.display="none";
+    });
+
     const resetBtn=el("button",{className:"toolbar-btn danger-hover",onClick:()=>{
       showConfirmModal(wrap,"איפוס כמויות","לאפס את כל הכמויות במחסן ל-0?",async()=>{
         const updates={};
@@ -521,15 +577,18 @@ function renderItemsView(c,whId,items,wrap){
     resetBtn.appendChild(icon("reset",14));resetBtn.appendChild(document.createTextNode("אפס כמויות"));
     const exportBtn=el("button",{className:"toolbar-btn",onClick:()=>showExportModal(wrap,currentWhId,currentItems)});
     exportBtn.appendChild(icon("note",14));exportBtn.appendChild(document.createTextNode("יצוא רשימה"));
-    toolbar.append(permSortBtn,reorderBtn,resetBtn,exportBtn);
-    c.appendChild(toolbar);
+    toolbar.append(sortWrap,resetBtn,exportBtn);
+    searchWrap.appendChild(toolbar);
+    
+    // Insert searchWrap into wrap, right before content
+    wrap.insertBefore(searchWrap,c);
 
     const listContainer=el("div",{id:"itemsList"});
     c.appendChild(listContainer);
   }
 
   // Update search input value without losing focus
-  const searchInput=c.querySelector('#searchInput');
+  const searchInput=wrap.querySelector('#searchInput');
   if(searchInput&&document.activeElement!==searchInput){searchInput.value=searchQuery}
 
   renderItemsList(c,whId,items,wrap);
@@ -606,26 +665,88 @@ function renderItemsList(c,whId,items,wrap){
     card.dataset.itemId=itemId;
 
     if(reorderMode){
-      // Reorder mode - show up/down buttons
-      const grip=el("div",{style:{display:"flex",flexDirection:"column",gap:"2px",marginLeft:"8px"}});
-      const upBtn=el("button",{className:"icon-btn",style:{padding:"2px"},onClick:async()=>{
-        const idx=filtered.findIndex(([id])=>id===itemId);
-        if(idx<=0)return;
-        const prevId=filtered[idx-1][0];
-        const prevOrder=filtered[idx-1][1].order||0;
-        const curOrder=item.order||0;
-        await dbUpdate(`warehouses/${whId}`,{[`items/${itemId}/order`]:prevOrder,[`items/${prevId}/order`]:curOrder});
-      }});upBtn.appendChild(icon("up",16));
-      const downBtn=el("button",{className:"icon-btn",style:{padding:"2px"},onClick:async()=>{
-        const idx=filtered.findIndex(([id])=>id===itemId);
-        if(idx>=filtered.length-1)return;
-        const nextId=filtered[idx+1][0];
-        const nextOrder=filtered[idx+1][1].order||0;
-        const curOrder=item.order||0;
-        await dbUpdate(`warehouses/${whId}`,{[`items/${itemId}/order`]:nextOrder,[`items/${nextId}/order`]:curOrder});
-      }});downBtn.appendChild(icon("down",16));
-      grip.append(upBtn,downBtn);
-      card.appendChild(grip);
+      // Drag handle
+      const handle=el("div",{className:"drag-handle",style:{marginLeft:"8px",display:"flex",alignItems:"center"}});
+      handle.appendChild(icon("grip",22));
+      card.appendChild(handle);
+      card.setAttribute("draggable","true");
+
+      // HTML5 drag (desktop)
+      card.addEventListener("dragstart",e=>{
+        dragSrcId=itemId;
+        card.classList.add("dragging");
+        e.dataTransfer.effectAllowed="move";
+        e.dataTransfer.setData("text/plain",itemId);
+      });
+      card.addEventListener("dragend",()=>{
+        card.classList.remove("dragging");
+        listContainer.querySelectorAll(".item-card").forEach(c=>c.classList.remove("drag-over"));
+      });
+      card.addEventListener("dragover",e=>{
+        e.preventDefault();e.dataTransfer.dropEffect="move";
+        if(dragSrcId&&dragSrcId!==itemId){
+          listContainer.querySelectorAll(".item-card").forEach(c=>c.classList.remove("drag-over"));
+          card.classList.add("drag-over");
+        }
+      });
+      card.addEventListener("dragleave",()=>card.classList.remove("drag-over"));
+      card.addEventListener("drop",async e=>{
+        e.preventDefault();card.classList.remove("drag-over");
+        if(!dragSrcId||dragSrcId===itemId)return;
+        const fromIdx=filtered.findIndex(([id])=>id===dragSrcId);
+        const toIdx=filtered.findIndex(([id])=>id===itemId);
+        if(fromIdx===-1||toIdx===-1)return;
+        const newOrd=[...filtered];const[moved]=newOrd.splice(fromIdx,1);newOrd.splice(toIdx,0,moved);
+        const updates={};newOrd.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
+        dragSrcId=null;
+        await dbUpdate(`warehouses/${whId}`,updates);
+      });
+
+      // Touch drag (mobile)
+      handle.addEventListener("touchstart",e=>{
+        e.preventDefault();
+        const touch=e.touches[0];
+        const rect=card.getBoundingClientRect();
+        touchDrag={itemId,startY:touch.clientY,rectTop:rect.top,rectLeft:rect.left,rectWidth:rect.width,clone:null,targetId:null};
+        touchDrag.timer=setTimeout(()=>{
+          const clone=card.cloneNode(true);
+          clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;`;
+          document.body.appendChild(clone);
+          touchDrag.clone=clone;
+          card.style.opacity="0.3";
+        },80);
+      },{passive:false});
+      handle.addEventListener("touchmove",e=>{
+        if(!touchDrag)return;e.preventDefault();
+        const touch=e.touches[0];
+        const dy=touch.clientY-touchDrag.startY;
+        if(touchDrag.clone)touchDrag.clone.style.top=(touchDrag.rectTop+dy)+"px";
+        const under=document.elementFromPoint(touch.clientX,touch.clientY);
+        const targetCard=under?.closest("[data-item-id]");
+        const tid=targetCard?.dataset.itemId;
+        listContainer.querySelectorAll(".item-card").forEach(c=>c.classList.remove("drag-over"));
+        if(tid&&tid!==touchDrag.itemId){targetCard.classList.add("drag-over");touchDrag.targetId=tid;}
+        else touchDrag.targetId=null;
+      },{passive:false});
+      handle.addEventListener("touchend",async()=>{
+        if(!touchDrag)return;
+        clearTimeout(touchDrag.timer);
+        if(touchDrag.clone)touchDrag.clone.remove();
+        card.style.opacity="";
+        listContainer.querySelectorAll(".item-card").forEach(c=>c.classList.remove("drag-over"));
+        const tid=touchDrag.targetId;
+        const srcId=touchDrag.itemId;
+        touchDrag=null;
+        if(tid&&srcId!==tid){
+          const fromIdx=filtered.findIndex(([id])=>id===srcId);
+          const toIdx=filtered.findIndex(([id])=>id===tid);
+          if(fromIdx!==-1&&toIdx!==-1){
+            const newOrd=[...filtered];const[moved]=newOrd.splice(fromIdx,1);newOrd.splice(toIdx,0,moved);
+            const updates={};newOrd.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
+            await dbUpdate(`warehouses/${whId}`,updates);
+          }
+        }
+      });
     }
 
     const info=el("div",{className:"item-info",style:{flex:"1",minWidth:"0"}});
@@ -898,6 +1019,7 @@ function showExportModal(parent,whId,items){
     m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"16px"}},"העתק את הטקסט או שתף אותו"));
 
     let sorted=[...items].sort((a,b)=>a[1].name.localeCompare(b[1].name,"he"));
+    sorted=sorted.filter(([,item])=>(item.quantity||0)>0);
     const text=sorted.map(([,item])=>`${item.name} (${item.quantity||0})`).join("\n");
 
     const ta=el("textarea",{className:"app-input",rows:"8",style:{direction:"rtl",lineHeight:"1.8",fontSize:"15px"},readonly:"true"});
@@ -961,12 +1083,12 @@ function canSwipeBack(){
 function updateSwipe(dx){
   const screen=document.querySelector('.screen:last-child');
   if(!screen)return;
-  screen.style.transform=`translateX(${dx}px)`;
+  screen.style.transform=`translateX(-${dx}px)`;
   screen.style.transition='none';
-  // Also move home screen behind
+  // Also move home screen behind (slides in from right for RTL)
   if(homeScreen&&homeScreen!==screen){
     const progress=Math.min(dx/window.innerWidth,1);
-    homeScreen.style.transform=`translateX(${-25+25*progress}%)`;
+    homeScreen.style.transform=`translateX(${25-25*progress}%)`;
     homeScreen.style.opacity=String(0.6+0.4*progress);
     homeScreen.style.transition='none';
     homeScreen.style.position='absolute';homeScreen.style.top='0';homeScreen.style.left='0';homeScreen.style.right='0';
@@ -979,7 +1101,7 @@ function endSwipe(completed){
   if(completed){
     if(screen){
       screen.style.transition='transform 0.3s cubic-bezier(0.32,0.72,0,1)';
-      screen.style.transform='translateX(100%)';
+      screen.style.transform='translateX(-100%)';
     }
     if(homeScreen&&homeScreen!==screen){
       homeScreen.style.transition='transform 0.3s cubic-bezier(0.32,0.72,0,1), opacity 0.3s cubic-bezier(0.32,0.72,0,1)';
@@ -992,13 +1114,12 @@ function endSwipe(completed){
       cleanup();
       currentWhId=null;isShowingDetail=false;
       const app=$("#app");app.innerHTML="";app.appendChild(homeScreen);
-      // Reattach home listeners
       homeUnsubs.forEach(f=>f());homeUnsubs=[];
       const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
         const whIds=data?Object.keys(data):[];
         renderWarehouseList(cachedHomeContent,whIds,homeScreen);
       });
-      homeUnsubs.push(u);unsubscribers.push(u);
+      homeUnsubs.push(u);
     },310);
   }else{
     if(screen){
@@ -1007,7 +1128,7 @@ function endSwipe(completed){
     }
     if(homeScreen&&homeScreen!==screen){
       homeScreen.style.transition='transform 0.25s cubic-bezier(0.32,0.72,0,1), opacity 0.25s cubic-bezier(0.32,0.72,0,1)';
-      homeScreen.style.transform='translateX(-25%)';
+      homeScreen.style.transform='translateX(25%)';
       homeScreen.style.opacity='0.6';
       setTimeout(()=>{
         if(homeScreen.parentElement)homeScreen.parentElement.removeChild(homeScreen);
@@ -1022,22 +1143,22 @@ function endSwipe(completed){
 document.addEventListener('touchstart',e=>{
   if(!canSwipeBack())return;
   const x=e.touches[0].clientX;
-  if(x>30)return;
+  if(x<window.innerWidth-30)return;
   swipeStartX=x;
   swipeStartY=e.touches[0].clientY;
   swipeActive=false;
 },{passive:true});
 
 document.addEventListener('touchmove',e=>{
-  if(swipeStartX>30)return;
+  if(swipeStartX<window.innerWidth-30)return;
   if(!canSwipeBack())return;
   const x=e.touches[0].clientX;
   const y=e.touches[0].clientY;
-  const dx=x-swipeStartX;
+  const dx=swipeStartX-x;
   const dy=Math.abs(y-swipeStartY);
   if(!swipeActive){
     if(dx>10&&dy<30){swipeActive=true;document.body.style.overflow='hidden'}
-    else if(dy>10){swipeStartX=999;return}
+    else if(dy>10){swipeStartX=0;return}
     else return;
   }
   if(swipeActive&&dx>0){e.preventDefault();updateSwipe(dx)}
@@ -1046,7 +1167,7 @@ document.addEventListener('touchmove',e=>{
 document.addEventListener('touchend',e=>{
   if(!swipeActive)return;
   document.body.style.overflow='';
-  const dx=e.changedTouches[0].clientX-swipeStartX;
+  const dx=swipeStartX-e.changedTouches[0].clientX;
   endSwipe(dx>100);
 },{passive:true});
 
@@ -1055,5 +1176,6 @@ function init(){if(window.FB){FB=window.FB;startApp()}else window.addEventListen
 function startApp(){try{const s=localStorage.getItem("inv_user");if(s){currentUser=JSON.parse(s);renderHome();return}}catch{}renderAuth()}
 init();
 </script>
+
 </body>
 </html>
