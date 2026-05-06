@@ -435,9 +435,17 @@ let currentItems=[];
 let currentWhId=null;
 let dragSrcId=null;
 let touchDrag=null;
+let userWarehouseRole='member';
+let currentWhData=null;
+
+function memberCan(action){
+  if(userWarehouseRole==='owner'||userWarehouseRole==='admin')return true;
+  const perms=(currentWhData&&currentWhData.permissions)||{};
+  return !perms['restrict_'+action];
+}
 
 function renderListDetail(whId){
-  cleanup();currentSort="manual";searchQuery="";reorderMode=false;
+  cleanup();currentSort="manual";searchQuery="";reorderMode=false;userWarehouseRole='member';currentWhData=null;
   const wrap=el("div",{className:"screen",style:{paddingBottom:"100px"}});
   const header=el("div",{className:"header"});
   const hr=el("div",{style:{display:"flex",alignItems:"center",gap:"12px"}});
@@ -448,8 +456,10 @@ function renderListDetail(whId){
   hi.append(titleEl,countEl);hr.append(bb,hi);
   const hl=el("div",{style:{display:"flex",gap:"8px"}});
   const rb=el("button",{className:"icon-btn",onClick:()=>{rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),600)}});
-  rb.appendChild(icon("refresh",18));hl.appendChild(rb);
-  header.append(hr,hl);wrap.appendChild(header);
+  rb.appendChild(icon("refresh",18));
+  const settingsBtn=el("button",{className:"icon-btn",onClick:()=>currentWhData&&showWarehouseSettingsModal(wrap,whId,currentWhData)});
+  settingsBtn.appendChild(icon("settings",20));
+  hl.append(rb,settingsBtn);header.append(hr,hl);wrap.appendChild(header);
   const content=el("div",{style:{padding:"16px 16px 0"}});wrap.appendChild(content);
   const fab=el("button",{className:"fab",onClick:()=>showNewItemModal(wrap,whId)});
   fab.appendChild(icon("plus",24));wrap.appendChild(fab);
@@ -458,9 +468,18 @@ function renderListDetail(whId){
 
   dbListenCached(`warehouses/${whId}`,data=>{
     if(!data){renderHome();return}
+    currentWhData=data;
+    // Determine role for current user
+    if(data.owner===currentUser.username) userWarehouseRole='owner';
+    else if(data.roles&&data.roles[currentUser.username]==='admin') userWarehouseRole='admin';
+    else userWarehouseRole='member';
+    // Show/hide FAB based on permission
+    fab.style.display=memberCan('add')?'flex':'none';
     titleEl.textContent=data.name;
     const items=data.items?Object.entries(data.items):[];
     countEl.textContent=`${items.length} פריטים`;
+    // Apply default sort from warehouse settings
+    if(data.sortMode&&data.sortMode!=='manual')currentSort=data.sortMode;
     renderItemsView(content,whId,items,wrap);
   });
 }
@@ -564,7 +583,7 @@ function renderItemsView(c,whId,items,wrap){
       if(!sortWrap.contains(e.target))sortMenu.style.display="none";
     });
 
-    const resetBtn=el("button",{className:"toolbar-btn danger-hover",onClick:()=>{
+    const resetBtn=el("button",{className:"toolbar-btn danger-hover",style:{display:memberCan('reset')?'':'none'},onClick:()=>{
       showConfirmModal(wrap,"איפוס כמויות","לאפס את כל הכמויות במחסן ל-0?",async()=>{
         const updates={};
         currentItems.forEach(([id,item])=>{
@@ -759,13 +778,14 @@ function renderItemsList(c,whId,items,wrap){
 
     const actions=el("div",{style:{display:"flex",gap:"2px",alignItems:"center",flexShrink:"0",marginRight:"8px"}});
     if(!reorderMode){
-      const eb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showEditItemModal(wrap,whId,itemId,item)});eb.appendChild(icon("edit",18));
+      const canEdit=memberCan('edit');
+      if(canEdit){const eb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showEditItemModal(wrap,whId,itemId,item)});eb.appendChild(icon("edit",18));actions.appendChild(eb);}
       const nb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showNoteModal(wrap,whId,itemId,item)});nb.appendChild(icon("note",18));
       const hb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showHistoryModal(wrap,item)});hb.appendChild(icon("history",18));
       const sb=el("button",{className:"qty-btn qty-btn-sub",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"remove")});sb.appendChild(icon("minus",18));
       const ab=el("button",{className:"qty-btn qty-btn-add",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"add")});ab.appendChild(icon("plus",18));
-      const db=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`))});db.appendChild(icon("trash",18));
-      actions.append(eb,nb,hb,sb,ab,db);
+      actions.append(nb,hb,sb,ab);
+      if(canEdit){const db=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`))});db.appendChild(icon("trash",18));actions.appendChild(db);}
     }
     card.append(info,actions);
     itemsContainer.appendChild(card);
@@ -937,6 +957,149 @@ function showConfirmModal(parent,title,msg,onConfirm){
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     btns.appendChild(el("button",{className:"btn btn-warning",style:{flex:"1"},onClick:async()=>{await onConfirm();close()}},"אפס"));
     m.appendChild(btns);
+  });
+}
+
+function showWarehouseSettingsModal(parent,whId,wh){
+  const isAdmin=userWarehouseRole==='owner'||userWarehouseRole==='admin';
+  showModal(parent,(m,close)=>{
+    m.style.maxHeight='none';m.style.overflow='visible';
+    m.appendChild(el("h3",{style:{marginBottom:"16px"}},"הגדרות מחסן"));
+    const tabs=isAdmin?['חברים','הרשאות','סידור']:['חברים'];
+    const tabBar=el("div",{className:"tab-bar"});
+    const panelWrap=el("div",{style:{height:"320px",overflowY:"auto",direction:"ltr"}});
+    const panelEls={};
+    tabs.forEach((t,i)=>{
+      const panel=el("div",{style:{display:i===0?'block':'none',direction:"rtl",padding:"4px 0"}});
+      panelEls[t]=panel;panelWrap.appendChild(panel);
+      const btn=el("button",{className:"tab-btn"+(i===0?' active':''),onClick:()=>{
+        Object.values(panelEls).forEach(p=>p.style.display='none');
+        panel.style.display='block';
+        tabBar.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+      }},t);
+      tabBar.appendChild(btn);
+    });
+    m.appendChild(tabBar);m.appendChild(panelWrap);
+
+    // ── חברים ──
+    const mp=panelEls['חברים'];
+    function refreshMembers(){
+      mp.innerHTML='';
+      const members=wh.members?Object.keys(wh.members):[];
+      members.forEach(u=>{
+        const role=u===wh.owner?'owner':(wh.roles&&wh.roles[u]==='admin'?'admin':'member');
+        const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"10px",marginBottom:"6px"}});
+        const lbl=el("div",{style:{display:"flex",alignItems:"center",gap:"6px"}});
+        lbl.appendChild(el("span",{style:{fontSize:"13px"}},u));
+        if(u===currentUser.username)lbl.appendChild(el("span",{style:{fontSize:"11px",color:"var(--accent)"}},"(אתה)"));
+        if(role==='owner')lbl.appendChild(el("span",{style:{fontSize:"11px",color:"var(--warning)",background:"rgba(251,191,36,0.1)",padding:"2px 6px",borderRadius:"6px"}},"בעלים"));
+        else if(role==='admin')lbl.appendChild(el("span",{style:{fontSize:"11px",color:"var(--success)",background:"rgba(52,211,153,0.1)",padding:"2px 6px",borderRadius:"6px"}},"מנהל"));
+        row.appendChild(lbl);
+        if(isAdmin&&u!==wh.owner&&u!==currentUser.username){
+          const btns=el("div",{style:{display:"flex",gap:"4px"}});
+          if(role==='admin'){
+            const demote=el("button",{className:"btn btn-sm btn-ghost",style:{fontSize:"11px",padding:"3px 8px"},onClick:async()=>{
+              await dbRemove(`warehouses/${whId}/roles/${u}`);close();
+            }},"הסר מנהל");btns.appendChild(demote);
+          }else{
+            const promote=el("button",{className:"btn btn-sm",style:{fontSize:"11px",padding:"3px 8px",background:"var(--success)",color:"#000",border:"none"},onClick:async()=>{
+              await dbSet(`warehouses/${whId}/roles/${u}`,'admin');close();
+            }},"הפוך למנהל");btns.appendChild(promote);
+          }
+          const removeBtn=el("button",{className:"btn btn-danger btn-sm",style:{fontSize:"11px",padding:"3px 8px"},onClick:async()=>{
+            await dbRemove(`warehouses/${whId}/members/${u}`);
+            await dbRemove(`users/${u}/warehouses/${whId}`);
+            await dbRemove(`warehouses/${whId}/roles/${u}`);
+            close();
+          }},"הסר");btns.appendChild(removeBtn);
+          row.appendChild(btns);
+        }
+        if(!isAdmin&&u===currentUser.username&&wh.owner!==currentUser.username){
+          const leaveBtn=el("button",{className:"btn btn-danger btn-sm",style:{fontSize:"11px",padding:"3px 8px"},onClick:async()=>{
+            await dbRemove(`warehouses/${whId}/members/${u}`);
+            await dbRemove(`users/${u}/warehouses/${whId}`);
+            close();renderHome();
+          }},"עזוב");row.appendChild(leaveBtn);
+        }
+        mp.appendChild(row);
+      });
+      if(isAdmin){
+        const addRow=el("div",{style:{display:"flex",gap:"8px",marginTop:"10px"}});
+        const inp=el("input",{className:"app-input",placeholder:"שם משתמש להוספה",style:{flex:"1"},autocapitalize:"off"});
+        const err=el("p",{style:{color:"var(--danger)",fontSize:"12px",marginTop:"4px",minHeight:"16px"}});
+        const addBtn=el("button",{className:"btn btn-primary",style:{whiteSpace:"nowrap"},onClick:async()=>{
+          const target=inp.value.trim().toLowerCase();if(!target)return;
+          if(members.includes(target)){err.textContent="כבר חבר";return}
+          const tu=await dbGet(`users/${target}`);
+          if(!tu){err.textContent="משתמש לא נמצא";return}
+          await dbSet(`warehouses/${whId}/members/${target}`,true);
+          await dbSet(`users/${target}/warehouses/${whId}`,true);
+          inp.value='';close();
+        }},"הוסף");
+        addRow.append(inp,addBtn);
+        mp.appendChild(addRow);mp.appendChild(err);
+        inp.addEventListener("keydown",e=>{if(e.key==="Enter")addBtn.click()});
+      }
+    }
+    refreshMembers();
+
+    // ── הרשאות ──
+    if(isAdmin&&panelEls['הרשאות']){
+      const pp=panelEls['הרשאות'];
+      const perms=wh.permissions||{};
+      const permDefs=[
+        {key:'restrict_add',label:'מנע הוספת פריטים לחברים'},
+        {key:'restrict_reset',label:'מנע איפוס כמויות לחברים'},
+        {key:'restrict_edit',label:'מנע עריכה ומחיקה לחברים'},
+      ];
+      permDefs.forEach(({key,label})=>{
+        const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid var(--border)"}});
+        row.appendChild(el("span",{style:{fontSize:"14px"}},label));
+        const tog=el("button",{style:{
+          width:"44px",height:"24px",borderRadius:"12px",border:"none",cursor:"pointer",
+          background:perms[key]?"var(--danger)":"var(--border)",transition:"background .2s",position:"relative"
+        },onClick:async()=>{
+          const cur=!!perms[key];
+          await dbUpdate(`warehouses/${whId}`,{[`permissions/${key}`]:!cur});
+          perms[key]=!cur;
+          tog.style.background=perms[key]?"var(--danger)":"var(--border)";
+          knob.style.right=perms[key]?"2px":"";knob.style.left=perms[key]?"":"2px";
+        }});
+        const knob=el("div",{style:{
+          position:"absolute",width:"20px",height:"20px",borderRadius:"50%",background:"#fff",
+          top:"2px",transition:"left .2s, right .2s",
+          ...(perms[key]?{right:"2px"}:{left:"2px"})
+        }});
+        tog.appendChild(knob);row.appendChild(tog);
+        pp.appendChild(row);
+      });
+    }
+
+    // ── סידור ──
+    if(isAdmin&&panelEls['סידור']){
+      const sp=panelEls['סידור'];
+      const curSort=wh.sortMode||'manual';
+      const sortOpts=[
+        {val:'manual',label:'ידני (גרירה)'},
+        {val:'alpha',label:'א-ב (אלפביתי)'},
+        {val:'qty-desc',label:'כמות: גבוה לנמוך'},
+        {val:'qty-asc',label:'כמות: נמוך לגבוה'},
+      ];
+      sp.appendChild(el("p",{style:{fontSize:"13px",color:"var(--text-sec)",marginBottom:"12px"}},"ברירת מחדל לסידור פריטים:"));
+      sortOpts.forEach(({val,label})=>{
+        const row=el("div",{style:{display:"flex",alignItems:"center",gap:"10px",padding:"10px 0",borderBottom:"1px solid var(--border)",cursor:"pointer"},onClick:async()=>{
+          await dbSet(`warehouses/${whId}/sortMode`,val);
+          sp.querySelectorAll('.sort-chk').forEach(c=>c.textContent='');
+          row.querySelector('.sort-chk').textContent='✓';
+        }});
+        const chk=el("span",{className:"sort-chk",style:{color:"var(--accent)",fontWeight:"700",width:"16px",display:"inline-block"}},curSort===val?'✓':'');
+        row.appendChild(chk);row.appendChild(el("span",{style:{fontSize:"14px"}},label));
+        sp.appendChild(row);
+      });
+    }
+
+    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"16px"},onClick:close},"סגור"));
   });
 }
 
