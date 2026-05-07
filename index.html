@@ -1042,18 +1042,28 @@ function showWarehouseSettingsModal(parent,whId,wh){
             color:isCurrentlyAdmin?"var(--success)":"var(--text-muted)",
             borderColor:isCurrentlyAdmin?"var(--success)":"var(--border)"
           },onClick:async()=>{
-            const choice=await showActionSheet([
+            const sheetOpts=[
               isCurrentlyAdmin
                 ?{label:'הסר מנהל',value:'demote'}
                 :{label:'הפוך למנהל',value:'promote'},
-              {label:'הסר מהמחסן',style:'danger',value:'remove'}
-            ]);
+            ];
+            if(userWarehouseRole==='owner')sheetOpts.push({label:'העבר בעלות',value:'transfer'});
+            sheetOpts.push({label:'הסר מהמחסן',style:'danger',value:'remove'});
+            const choice=await showActionSheet(sheetOpts,u);
             if(choice==='promote'){
               await dbSet(`warehouses/${whId}/roles/${u}`,'admin');
               if(!wh.roles)wh.roles={};wh.roles[u]='admin';refreshMembers();
             }else if(choice==='demote'){
               await dbRemove(`warehouses/${whId}/roles/${u}`);
               if(!wh.roles)wh.roles={};delete wh.roles[u];refreshMembers();
+            }else if(choice==='transfer'){
+              const c2=await showActionSheet([{label:`העבר בעלות ל-${u} ועזוב`,style:'danger',value:'yes'}],`העבר בעלות ל-${u}?`);
+              if(c2==='yes'){
+                await dbSet(`warehouses/${whId}/owner`,u);
+                await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+                await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+                close();renderHome();
+              }
             }else if(choice==='remove'){
               await dbRemove(`warehouses/${whId}/members/${u}`);
               await dbRemove(`users/${u}/warehouses/${whId}`);
@@ -1187,8 +1197,12 @@ function showShareModal(parent,whId,wh){
         if(isOwner&&!isMe){
           const btnsRow=el("div",{style:{display:"flex",gap:"4px"}});
           const transferBtn=el("button",{className:"btn btn-sm",style:{padding:"4px 8px",fontSize:"11px",background:"var(--warning)",color:"#000",border:"none"},onClick:async()=>{
+            const c2=await showActionSheet([{label:`העבר בעלות ל-${u} ועזוב`,style:'danger',value:'yes'}],`העבר בעלות ל-${u}?`);
+            if(c2!=='yes')return;
             await dbSet(`warehouses/${whId}/owner`,u);
-            close();
+            await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+            await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+            close();renderHome();
           }},"העבר בעלות");
           const removeBtn=el("button",{className:"btn btn-danger btn-sm",style:{padding:"4px 10px",fontSize:"12px"},onClick:async()=>{
             await dbRemove(`warehouses/${whId}/members/${u}`);
