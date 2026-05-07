@@ -99,13 +99,15 @@
     .toolbar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
     .toolbar-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:12px;display:flex;align-items:center;gap:4px;transition:all .2s;white-space:nowrap}
     @keyframes sheetUp{from{transform:translateY(110%)}to{transform:translateY(0)}}
-    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.18);display:flex;flex-direction:column;justify-content:flex-end;padding:0 10px max(env(safe-area-inset-bottom),12px);animation:fadeIn .2s ease}
-    .action-sheet-group{border-radius:16px;overflow:hidden;margin-bottom:10px;animation:sheetUp .38s cubic-bezier(0.32,0.72,0,1);background:rgba(20,20,22,0.55);-webkit-backdrop-filter:blur(80px) saturate(2.5) brightness(0.9);backdrop-filter:blur(80px) saturate(2.5) brightness(0.9);border:0.5px solid rgba(255,255,255,0.14);box-shadow:0 24px 60px rgba(0,0,0,0.55)}
-    .action-sheet-item{width:100%;padding:18px 20px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#4f9bff;transition:background .12s;-webkit-tap-highlight-color:transparent;letter-spacing:-0.01em}
-    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(255,255,255,0.11)}
-    .action-sheet-item:active{background:rgba(255,255,255,0.1)}
+    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.22);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:flex;flex-direction:column;justify-content:flex-end;padding:0 10px max(env(safe-area-inset-bottom),16px);animation:fadeIn .22s ease}
+    .action-sheet-group{border-radius:18px;overflow:hidden;margin-bottom:10px;animation:sheetUp .38s cubic-bezier(0.32,0.72,0,1);position:relative;background:rgba(8,8,12,0.45);-webkit-backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);border:0.5px solid rgba(255,255,255,0.22);box-shadow:0 30px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.18),inset 0 -1px 0 rgba(0,0,0,0.25)}
+    .action-sheet-item{width:100%;padding:18px 20px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#4f9bff;transition:background .12s;-webkit-tap-highlight-color:transparent}
+    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(255,255,255,0.13)}
+    .action-sheet-item:active{background:rgba(255,255,255,0.09)}
     .action-sheet-item.danger{color:#ff453a}
-    .action-sheet-item.cancel{font-weight:600;color:var(--text);border-radius:16px;background:rgba(20,20,22,0.55);-webkit-backdrop-filter:blur(80px) saturate(2.5) brightness(0.9);backdrop-filter:blur(80px) saturate(2.5) brightness(0.9);border:0.5px solid rgba(255,255,255,0.14);box-shadow:0 24px 60px rgba(0,0,0,0.55)}
+    .action-sheet-cancel-group{border-radius:18px;overflow:hidden;margin-bottom:10px;animation:sheetUp .38s cubic-bezier(0.32,0.72,0,1);background:rgba(8,8,12,0.52);-webkit-backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);border:0.5px solid rgba(255,255,255,0.22);box-shadow:0 30px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.18)}
+    .action-sheet-cancel{width:100%;padding:18px 20px;text-align:center;font-size:17px;font-weight:600;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:var(--text);-webkit-tap-highlight-color:transparent}
+    .action-sheet-cancel:active{background:rgba(255,255,255,0.09)}
     .toolbar-btn:hover,.toolbar-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
     .toolbar-btn.danger-hover:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
     .note-text{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -807,8 +809,8 @@ function showActionSheet(items,title){
       const btn=el("button",{className:"action-sheet-item"+(s==='danger'?' danger':''),onClick:()=>{ov.remove();resolve(value)}},label);
       mainGroup.appendChild(btn);
     });
-    const cancelGroup=el("div",{className:"action-sheet-group"});
-    const cancelBtn=el("button",{className:"action-sheet-item cancel",onClick:()=>{ov.remove();resolve(null)}},"ביטול");
+    const cancelGroup=el("div",{className:"action-sheet-cancel-group"});
+    const cancelBtn=el("button",{className:"action-sheet-cancel",onClick:()=>{ov.remove();resolve(null)}},"ביטול");
     cancelGroup.appendChild(cancelBtn);
     ov.appendChild(mainGroup);ov.appendChild(cancelGroup);
     document.body.appendChild(ov);
