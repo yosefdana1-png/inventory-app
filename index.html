@@ -98,14 +98,14 @@
     .search-bar>svg{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none}
     .toolbar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
     .toolbar-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:12px;display:flex;align-items:center;gap:4px;transition:all .2s;white-space:nowrap}
-    @keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.4);display:flex;flex-direction:column;justify-content:flex-end;padding:8px;animation:fadeIn .15s ease}
-    .action-sheet-group{border-radius:14px;overflow:hidden;margin-bottom:8px;animation:sheetUp .28s cubic-bezier(0.32,0.72,0,1)}
-    .action-sheet-item{width:100%;padding:17px 16px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:rgba(44,44,46,0.92);-webkit-backdrop-filter:blur(40px) saturate(1.8);backdrop-filter:blur(40px) saturate(1.8);color:#4f9bff;transition:background .1s}
-    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(255,255,255,0.12)}
-    .action-sheet-item:active{background:rgba(60,60,62,0.95)}
+    @keyframes sheetUp{from{transform:translateY(110%)}to{transform:translateY(0)}}
+    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.35);display:flex;flex-direction:column;justify-content:flex-end;padding:0 8px 8px;animation:fadeIn .2s ease}
+    .action-sheet-group{border-radius:16px;overflow:hidden;margin-bottom:8px;animation:sheetUp .35s cubic-bezier(0.32,0.72,0,1);background:rgba(30,30,32,0.78);-webkit-backdrop-filter:blur(50px) saturate(2);backdrop-filter:blur(50px) saturate(2)}
+    .action-sheet-item{width:100%;padding:17px 20px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#4f9bff;transition:background .15s;-webkit-tap-highlight-color:transparent}
+    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(255,255,255,0.14)}
+    .action-sheet-item:active{background:rgba(255,255,255,0.08)}
     .action-sheet-item.danger{color:#ff453a}
-    .action-sheet-item.cancel{font-weight:600;border-radius:14px;margin-top:0}
+    .action-sheet-item.cancel{font-weight:600;border-radius:16px;background:rgba(30,30,32,0.78);-webkit-backdrop-filter:blur(50px) saturate(2);backdrop-filter:blur(50px) saturate(2)}
     .toolbar-btn:hover,.toolbar-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
     .toolbar-btn.danger-hover:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
     .note-text{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -532,64 +532,31 @@ function renderItemsView(c,whId,items,wrap){
     // Toolbar inside searchWrap so it sticks too
     const toolbar=el("div",{className:"toolbar",id:"toolbar",style:{marginTop:"8px"}});
     
-    // Sort button with dropdown
+    // Sort button → action sheet
     const sortWrap=el("div",{style:{position:"relative"}});
-    const sortBtn=el("button",{className:"toolbar-btn",onClick:()=>{
-      const menu=sortWrap.querySelector('.sort-menu');
-      if(menu)menu.style.display=menu.style.display==="none"?"flex":"none";
+    const sortBtn=el("button",{className:"toolbar-btn",onClick:async()=>{
+      const choice=await showActionSheet([
+        {label:"לפי א-ב",value:"alpha"},
+        {label:"כמות: גבוה לנמוך",value:"qty-desc"},
+        {label:"כמות: נמוך לגבוה",value:"qty-asc"},
+        {label:"שנה סדר ידני",value:"reorder"},
+      ]);
+      if(!choice)return;
+      if(choice==="reorder"){
+        reorderMode=!reorderMode;currentSort="manual";
+        renderItemsList(c,currentWhId,currentItems,wrap);
+      }else{
+        const sorted=[...currentItems].sort((a,b)=>{
+          if(choice==="alpha")return a[1].name.localeCompare(b[1].name,"he");
+          if(choice==="qty-desc")return (b[1].quantity||0)-(a[1].quantity||0);
+          return (a[1].quantity||0)-(b[1].quantity||0);
+        });
+        const updates={};sorted.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
+        await dbUpdate(`warehouses/${currentWhId}`,updates);
+      }
     }});
     sortBtn.appendChild(icon("sort",14));sortBtn.appendChild(document.createTextNode("סידור"));
     sortWrap.appendChild(sortBtn);
-    
-    const sortMenu=el("div",{className:"sort-menu",style:{
-      display:"none",position:"absolute",top:"110%",right:"0",background:"var(--surface)",
-      border:"1px solid var(--border)",borderRadius:"12px",padding:"6px",
-      flexDirection:"column",gap:"4px",zIndex:"60",minWidth:"140px",
-      boxShadow:"0 8px 24px rgba(0,0,0,0.4)"
-    }});
-    
-    const sortAlpha=el("button",{className:"toolbar-btn",style:{width:"100%",justifyContent:"flex-start",border:"none"},onClick:async()=>{
-      sortMenu.style.display="none";
-      const sorted=[...currentItems].sort((a,b)=>a[1].name.localeCompare(b[1].name,"he"));
-      const updates={};
-      sorted.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
-      await dbUpdate(`warehouses/${currentWhId}`,updates);
-    }});
-    sortAlpha.appendChild(icon("sort",14));sortAlpha.appendChild(document.createTextNode("לפי א-ב"));
-    
-    const sortQtyDesc=el("button",{className:"toolbar-btn",style:{width:"100%",justifyContent:"flex-start",border:"none"},onClick:async()=>{
-      sortMenu.style.display="none";
-      const sorted=[...currentItems].sort((a,b)=>(b[1].quantity||0)-(a[1].quantity||0));
-      const updates={};
-      sorted.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
-      await dbUpdate(`warehouses/${currentWhId}`,updates);
-    }});
-    sortQtyDesc.appendChild(icon("down",14));sortQtyDesc.appendChild(document.createTextNode("כמות: גבוה לנמוך"));
-    
-    const sortQtyAsc=el("button",{className:"toolbar-btn",style:{width:"100%",justifyContent:"flex-start",border:"none"},onClick:async()=>{
-      sortMenu.style.display="none";
-      const sorted=[...currentItems].sort((a,b)=>(a[1].quantity||0)-(b[1].quantity||0));
-      const updates={};
-      sorted.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
-      await dbUpdate(`warehouses/${currentWhId}`,updates);
-    }});
-    sortQtyAsc.appendChild(icon("up",14));sortQtyAsc.appendChild(document.createTextNode("כמות: נמוך לגבוה"));
-    
-    const sortReorder=el("button",{className:"toolbar-btn",id:"sortReorderBtn",style:{width:"100%",justifyContent:"flex-start",border:"none",borderTop:"1px solid var(--border)",marginTop:"4px",paddingTop:"8px",borderRadius:"0 0 8px 8px"},onClick:()=>{
-      sortMenu.style.display="none";
-      reorderMode=!reorderMode;currentSort="manual";
-      sortReorder.lastChild.textContent=reorderMode?"סיום סידור":"שנה סדר";
-      sortReorder.style.color=reorderMode?"var(--accent)":"";
-      renderItemsList(c,currentWhId,currentItems,wrap);
-    }});
-    sortReorder.appendChild(icon("grip",14));sortReorder.appendChild(document.createTextNode("שנה סדר"));
-    sortMenu.append(sortAlpha,sortQtyDesc,sortQtyAsc,sortReorder);
-    sortWrap.appendChild(sortMenu);
-
-    // Close sort menu when clicking outside
-    document.addEventListener("click",e=>{
-      if(!sortWrap.contains(e.target))sortMenu.style.display="none";
-    });
 
     const resetBtn=el("button",{className:"toolbar-btn danger-hover",style:{display:memberCan('reset')?'':'none'},onClick:()=>{
       showConfirmModal(wrap,"איפוס כמויות","לאפס את כל הכמויות במחסן ל-0?",async()=>{
