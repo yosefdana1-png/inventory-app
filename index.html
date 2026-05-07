@@ -794,11 +794,18 @@ function renderItemsList(c,whId,items,wrap){
           {label:"היסטוריה",value:"history"},
         ];
         if(canEdit)opts.unshift({label:"עריכה",value:"edit"});
+        if(memberCan('reset')&&(item.quantity||0)>0)opts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
         if(canEdit)opts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
-        const choice=await showActionSheet(opts);
+        const choice=await showActionSheet(opts,item.name);
         if(choice==="edit")showEditItemModal(wrap,whId,itemId,item);
         else if(choice==="note")showNoteModal(wrap,whId,itemId,item);
         else if(choice==="history")showHistoryModal(wrap,item);
+        else if(choice==="reset"){
+          await dbUpdate(`warehouses/${whId}`,{
+            [`items/${itemId}/quantity`]:0,
+            [`items/${itemId}/history/${genId()}`]:{action:"איפוס",amount:item.quantity||0,result:0,by:currentUser.displayName,date:new Date().toISOString()}
+          });
+        }
         else if(choice==="delete")showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`));
       }});
       mb.appendChild(icon("more",18));
