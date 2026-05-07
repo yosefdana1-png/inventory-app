@@ -108,6 +108,8 @@
     .action-sheet-cancel-group{border-radius:18px;overflow:hidden;margin-bottom:10px;animation:sheetUp .38s cubic-bezier(0.32,0.72,0,1);background:rgba(8,8,12,0.52);-webkit-backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);border:0.5px solid rgba(255,255,255,0.22);box-shadow:0 30px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.18)}
     .action-sheet-cancel{width:100%;padding:18px 20px;text-align:center;font-size:17px;font-weight:600;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:var(--text);-webkit-tap-highlight-color:transparent}
     .action-sheet-cancel:active{background:rgba(255,255,255,0.09)}
+    .scroll-top-btn{position:fixed;bottom:100px;left:20px;width:46px;height:46px;border-radius:50%;background:rgba(8,8,12,0.55);-webkit-backdrop-filter:blur(40px) saturate(2.2) brightness(1.15);backdrop-filter:blur(40px) saturate(2.2) brightness(1.15);border:0.5px solid rgba(255,255,255,0.22);color:var(--accent);cursor:pointer;display:none;align-items:center;justify-content:center;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.18);opacity:0;transform:translateY(8px);transition:opacity .25s ease, transform .25s ease}
+    .scroll-top-btn.visible{display:flex;opacity:1;transform:translateY(0)}
     .toolbar-btn:hover,.toolbar-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
     .toolbar-btn.danger-hover:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
     .note-text{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -489,6 +491,13 @@ function renderListDetail(whId){
   const fab=el("button",{className:"fab",onClick:()=>showNewItemModal(wrap,whId)});
   fab.appendChild(icon("plus",24));wrap.appendChild(fab);
 
+  const scrollTopBtn=el("button",{className:"scroll-top-btn",onClick:()=>wrap.scrollTo({top:0,behavior:"smooth"})});
+  scrollTopBtn.appendChild(icon("up",22));
+  wrap.appendChild(scrollTopBtn);
+  wrap.addEventListener("scroll",()=>{
+    scrollTopBtn.classList.toggle("visible",wrap.scrollTop>300);
+  });
+
   navShowDetail(wrap);
 
   dbListenCached(`warehouses/${whId}`,data=>{
@@ -616,6 +625,10 @@ function renderItemsList(c,whId,items,wrap){
   }
   if(currentSort==="alpha"){
     filtered=[...filtered].sort((a,b)=>a[1].name.localeCompare(b[1].name,"he"));
+  }else if(currentSort==="qty-desc"){
+    filtered=[...filtered].sort((a,b)=>(b[1].quantity||0)-(a[1].quantity||0));
+  }else if(currentSort==="qty-asc"){
+    filtered=[...filtered].sort((a,b)=>(a[1].quantity||0)-(b[1].quantity||0));
   }else{
     filtered=[...filtered].sort((a,b)=>(a[1].order||0)-(b[1].order||0));
   }
