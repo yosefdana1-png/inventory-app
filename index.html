@@ -1059,12 +1059,19 @@ function showWarehouseSettingsModal(parent,whId,wh){
               await dbRemove(`warehouses/${whId}/roles/${u}`);
               if(!wh.roles)wh.roles={};delete wh.roles[u];refreshMembers();
             }else if(choice==='transfer'){
-              const c2=await showActionSheet([{label:`העבר בעלות ל-${u} ועזוב`,style:'danger',value:'yes'}],`העבר בעלות ל-${u}?`);
-              if(c2==='yes'){
+              const c2=await showActionSheet([
+                {label:`העבר בעלות ל-${u} והישאר חבר`,value:'stay'},
+                {label:`העבר בעלות ל-${u} ועזוב`,style:'danger',value:'leave'},
+              ],`העבר בעלות ל-${u}?`);
+              if(c2==='stay'||c2==='leave'){
                 await dbSet(`warehouses/${whId}/owner`,u);
-                await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
-                await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
-                close();renderHome();
+                if(c2==='leave'){
+                  await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+                  await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+                  close();renderHome();
+                }else{
+                  wh.owner=u;userWarehouseRole='member';refreshMembers();
+                }
               }
             }else if(choice==='remove'){
               await dbRemove(`warehouses/${whId}/members/${u}`);
@@ -1199,12 +1206,19 @@ function showShareModal(parent,whId,wh){
         if(isOwner&&!isMe){
           const btnsRow=el("div",{style:{display:"flex",gap:"4px"}});
           const transferBtn=el("button",{className:"btn btn-sm",style:{padding:"4px 8px",fontSize:"11px",background:"var(--warning)",color:"#000",border:"none"},onClick:async()=>{
-            const c2=await showActionSheet([{label:`העבר בעלות ל-${u} ועזוב`,style:'danger',value:'yes'}],`העבר בעלות ל-${u}?`);
-            if(c2!=='yes')return;
+            const c2=await showActionSheet([
+              {label:`העבר בעלות ל-${u} והישאר חבר`,value:'stay'},
+              {label:`העבר בעלות ל-${u} ועזוב`,style:'danger',value:'leave'},
+            ],`העבר בעלות ל-${u}?`);
+            if(!c2)return;
             await dbSet(`warehouses/${whId}/owner`,u);
-            await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
-            await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
-            close();renderHome();
+            if(c2==='leave'){
+              await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+              await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+              close();renderHome();
+            }else{
+              close();
+            }
           }},"העבר בעלות");
           const removeBtn=el("button",{className:"btn btn-danger btn-sm",style:{padding:"4px 10px",fontSize:"12px"},onClick:async()=>{
             await dbRemove(`warehouses/${whId}/members/${u}`);
