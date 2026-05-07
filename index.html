@@ -98,6 +98,14 @@
     .search-bar>svg{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none}
     .toolbar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
     .toolbar-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:12px;display:flex;align-items:center;gap:4px;transition:all .2s;white-space:nowrap}
+    @keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.4);display:flex;flex-direction:column;justify-content:flex-end;padding:8px;animation:fadeIn .15s ease}
+    .action-sheet-group{border-radius:14px;overflow:hidden;margin-bottom:8px;animation:sheetUp .28s cubic-bezier(0.32,0.72,0,1)}
+    .action-sheet-item{width:100%;padding:17px 16px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:rgba(44,44,46,0.92);-webkit-backdrop-filter:blur(40px) saturate(1.8);backdrop-filter:blur(40px) saturate(1.8);color:#4f9bff;transition:background .1s}
+    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(255,255,255,0.12)}
+    .action-sheet-item:active{background:rgba(60,60,62,0.95)}
+    .action-sheet-item.danger{color:#ff453a}
+    .action-sheet-item.cancel{font-weight:600;border-radius:14px;margin-top:0}
     .toolbar-btn:hover,.toolbar-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
     .toolbar-btn.danger-hover:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
     .note-text{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -794,6 +802,22 @@ function renderItemsList(c,whId,items,wrap){
 }
 
 // ═══════════ MODALS ═══════════
+function showActionSheet(items){
+  return new Promise(resolve=>{
+    const ov=el("div",{className:"action-sheet-overlay",onClick:e=>{if(e.target===ov){ov.remove();resolve(null)}}});
+    const mainGroup=el("div",{className:"action-sheet-group"});
+    const cancelGroup=el("div",{className:"action-sheet-group"});
+    items.forEach(({label,style:s,value})=>{
+      const btn=el("button",{className:"action-sheet-item"+(s==='danger'?' danger':''),onClick:()=>{ov.remove();resolve(value)}},label);
+      mainGroup.appendChild(btn);
+    });
+    const cancelBtn=el("button",{className:"action-sheet-item cancel",onClick:()=>{ov.remove();resolve(null)}},"ביטול");
+    cancelGroup.appendChild(cancelBtn);
+    ov.appendChild(mainGroup);ov.appendChild(cancelGroup);
+    document.body.appendChild(ov);
+  });
+}
+
 function showModal(parent,builder){
   const ov=el("div",{className:"modal-overlay",onClick:e=>{if(e.target===ov)ov.remove()}});
   const m=el("div",{className:"modal"});builder(m,()=>ov.remove());ov.appendChild(m);parent.appendChild(ov);
@@ -999,33 +1023,34 @@ function showWarehouseSettingsModal(parent,whId,wh){
         if(isOwner){
           acts.appendChild(el("span",{style:{fontSize:"12px",color:"var(--warning)",background:"rgba(251,191,36,0.12)",padding:"4px 10px",borderRadius:"20px",fontWeight:"500"}},"בעלים"));
         } else if(isAdmin&&u!==currentUser.username){
-          // Role pill toggle
-          const pill=el("button",{style:{
-            fontSize:"12px",padding:"4px 12px",borderRadius:"20px",border:"1px solid",cursor:"pointer",fontWeight:"500",transition:"all .2s",
+          // Role badge (tappable → action sheet)
+          const roleBadge=el("button",{style:{
+            fontSize:"12px",padding:"4px 12px",borderRadius:"20px",border:"1px solid",cursor:"pointer",fontWeight:"500",
             background:isCurrentlyAdmin?"rgba(52,211,153,0.12)":"transparent",
             color:isCurrentlyAdmin?"var(--success)":"var(--text-muted)",
             borderColor:isCurrentlyAdmin?"var(--success)":"var(--border)"
           },onClick:async()=>{
-            if(isCurrentlyAdmin){
-              await dbRemove(`warehouses/${whId}/roles/${u}`);
-              if(!wh.roles)wh.roles={};delete wh.roles[u];
-            }else{
+            const choice=await showActionSheet([
+              isCurrentlyAdmin
+                ?{label:'הסר מנהל',value:'demote'}
+                :{label:'הפוך למנהל',value:'promote'},
+              {label:'הסר מהמחסן',style:'danger',value:'remove'}
+            ]);
+            if(choice==='promote'){
               await dbSet(`warehouses/${whId}/roles/${u}`,'admin');
-              if(!wh.roles)wh.roles={};wh.roles[u]='admin';
+              if(!wh.roles)wh.roles={};wh.roles[u]='admin';refreshMembers();
+            }else if(choice==='demote'){
+              await dbRemove(`warehouses/${whId}/roles/${u}`);
+              if(!wh.roles)wh.roles={};delete wh.roles[u];refreshMembers();
+            }else if(choice==='remove'){
+              await dbRemove(`warehouses/${whId}/members/${u}`);
+              await dbRemove(`users/${u}/warehouses/${whId}`);
+              await dbRemove(`warehouses/${whId}/roles/${u}`);
+              if(wh.members)delete wh.members[u];
+              if(wh.roles)delete wh.roles[u];refreshMembers();
             }
-            refreshMembers();
-          }},isCurrentlyAdmin?'מנהל':'חבר');
-          // Trash button
-          const del=el("button",{style:{width:"30px",height:"30px",borderRadius:"8px",border:"none",cursor:"pointer",background:"var(--danger-bg)",color:"var(--danger)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:"0"},onClick:async()=>{
-            await dbRemove(`warehouses/${whId}/members/${u}`);
-            await dbRemove(`users/${u}/warehouses/${whId}`);
-            await dbRemove(`warehouses/${whId}/roles/${u}`);
-            if(wh.members)delete wh.members[u];
-            if(wh.roles)delete wh.roles[u];
-            refreshMembers();
-          }});
-          del.appendChild(icon("trash",14));
-          acts.append(pill,del);
+          }},isCurrentlyAdmin?'מנהל ▾':'חבר ▾');
+          acts.appendChild(roleBadge);
         } else if(isCurrentlyAdmin){
           acts.appendChild(el("span",{style:{fontSize:"12px",color:"var(--success)",background:"rgba(52,211,153,0.12)",padding:"4px 10px",borderRadius:"20px",fontWeight:"500"}},"מנהל"));
         } else if(!isAdmin&&u===currentUser.username){
