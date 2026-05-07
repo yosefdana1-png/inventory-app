@@ -137,6 +137,7 @@
   <symbol id="icon-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
   <symbol id="icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
   <symbol id="icon-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></symbol>
+  <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></symbol>
 </svg>
 
 <div id="app" style="height:100vh;height:100dvh">
@@ -428,10 +429,24 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
   meta.appendChild(el("span",{className:"wh-total",style:{fontSize:"13px",color:"var(--text-muted)"}},`סה״כ: ${total}`));
   info.appendChild(meta);
   const actions=el("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
-  const shBtn=el("button",{className:"icon-btn",onClick:e=>{e.stopPropagation();showShareModal(wrap,whId,wh)}});shBtn.appendChild(icon("share",18));
-  const dlBtn=el("button",{className:"icon-btn",onClick:e=>{e.stopPropagation();showDeleteModal(wrap,`להסיר את "${wh.name}"?`,async()=>{await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);const r=await dbGet(`warehouses/${whId}/members`);if(!r||Object.keys(r).length===0)await dbRemove(`warehouses/${whId}`)})}});dlBtn.appendChild(icon("trash",18));
+  const moreBtn=el("button",{className:"icon-btn",onClick:async e=>{
+    e.stopPropagation();
+    const isOwner=wh.owner===currentUser.username;
+    const choice=await showActionSheet([
+      {label:"שיתוף וניהול חברים",value:"share"},
+      {label:isOwner?"מחק מחסן":"עזוב מחסן",style:"danger",value:"delete"},
+    ]);
+    if(choice==="share")showShareModal(wrap,whId,wh);
+    else if(choice==="delete")showDeleteModal(wrap,isOwner?`למחוק את "${wh.name}"?`:`לעזוב את "${wh.name}"?`,async()=>{
+      await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+      await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+      const r=await dbGet(`warehouses/${whId}/members`);
+      if(!r||Object.keys(r).length===0)await dbRemove(`warehouses/${whId}`);
+    });
+  }});
+  moreBtn.appendChild(icon("more",18));
   const arrow=icon("forward",18);arrow.style.color="var(--text-muted)";
-  actions.append(shBtn,dlBtn,arrow);card.append(info,actions);
+  actions.append(moreBtn,arrow);card.append(info,actions);
   cardWrapper.appendChild(card);
 }
 
@@ -558,15 +573,15 @@ function renderItemsView(c,whId,items,wrap){
     sortBtn.appendChild(icon("sort",14));sortBtn.appendChild(document.createTextNode("סידור"));
     sortWrap.appendChild(sortBtn);
 
-    const resetBtn=el("button",{className:"toolbar-btn danger-hover",style:{display:memberCan('reset')?'':'none'},onClick:()=>{
-      showConfirmModal(wrap,"איפוס כמויות","לאפס את כל הכמויות במחסן ל-0?",async()=>{
-        const updates={};
-        currentItems.forEach(([id,item])=>{
-          updates[`items/${id}/quantity`]=0;
-          updates[`items/${id}/history/${genId()}`]={action:"איפוס",amount:item.quantity||0,result:0,by:currentUser.displayName,date:new Date().toISOString()};
-        });
-        await dbUpdate(`warehouses/${currentWhId}`,updates);
+    const resetBtn=el("button",{className:"toolbar-btn danger-hover",style:{display:memberCan('reset')?'':'none'},onClick:async()=>{
+      const choice=await showActionSheet([{label:"אפס את כל הכמויות ל-0",style:"danger",value:"confirm"}]);
+      if(choice!=="confirm")return;
+      const updates={};
+      currentItems.forEach(([id,item])=>{
+        updates[`items/${id}/quantity`]=0;
+        updates[`items/${id}/history/${genId()}`]={action:"איפוס",amount:item.quantity||0,result:0,by:currentUser.displayName,date:new Date().toISOString()};
       });
+      await dbUpdate(`warehouses/${currentWhId}`,updates);
     }});
     resetBtn.appendChild(icon("reset",14));resetBtn.appendChild(document.createTextNode("אפס כמויות"));
     const exportBtn=el("button",{className:"toolbar-btn",onClick:()=>showExportModal(wrap,currentWhId,currentItems)});
@@ -754,13 +769,23 @@ function renderItemsList(c,whId,items,wrap){
     const actions=el("div",{style:{display:"flex",gap:"2px",alignItems:"center",flexShrink:"0",marginRight:"8px"}});
     if(!reorderMode){
       const canEdit=memberCan('edit');
-      if(canEdit){const eb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showEditItemModal(wrap,whId,itemId,item)});eb.appendChild(icon("edit",18));actions.appendChild(eb);}
-      const nb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showNoteModal(wrap,whId,itemId,item)});nb.appendChild(icon("note",18));
-      const hb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showHistoryModal(wrap,item)});hb.appendChild(icon("history",18));
       const sb=el("button",{className:"qty-btn qty-btn-sub",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"remove")});sb.appendChild(icon("minus",18));
       const ab=el("button",{className:"qty-btn qty-btn-add",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"add")});ab.appendChild(icon("plus",18));
-      actions.append(nb,hb,sb,ab);
-      if(canEdit){const db=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:()=>showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`))});db.appendChild(icon("trash",18));actions.appendChild(db);}
+      const mb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:async()=>{
+        const opts=[
+          {label:"הערה",value:"note"},
+          {label:"היסטוריה",value:"history"},
+        ];
+        if(canEdit)opts.unshift({label:"עריכה",value:"edit"});
+        if(canEdit)opts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
+        const choice=await showActionSheet(opts);
+        if(choice==="edit")showEditItemModal(wrap,whId,itemId,item);
+        else if(choice==="note")showNoteModal(wrap,whId,itemId,item);
+        else if(choice==="history")showHistoryModal(wrap,item);
+        else if(choice==="delete")showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`));
+      }});
+      mb.appendChild(icon("more",18));
+      actions.append(mb,sb,ab);
     }
     card.append(info,actions);
     itemsContainer.appendChild(card);
