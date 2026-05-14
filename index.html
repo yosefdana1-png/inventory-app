@@ -623,7 +623,7 @@ function renderItemsList(c,whId,items,wrap){
   let filtered=items;
   if(searchQuery.trim()){
     const q=searchQuery.trim().toLowerCase();
-    filtered=items.filter(([,item])=>item.name.toLowerCase().includes(q)||(item.note&&item.note.toLowerCase().includes(q)));
+    filtered=items.filter(([,item])=>item.name.toLowerCase().includes(q)||(item.note&&item.note.toLowerCase().includes(q))||(item.sku&&item.sku.toLowerCase().includes(q)));
   }
   if(currentSort==="alpha"){
     filtered=[...filtered].sort((a,b)=>a[1].name.localeCompare(b[1].name,"he"));
@@ -657,6 +657,11 @@ function renderItemsList(c,whId,items,wrap){
       }
       const nameEl=card.querySelector('.item-name');
       if(nameEl&&nameEl.textContent!==item.name)nameEl.textContent=item.name;
+      const skuEl=card.querySelector('.item-sku');
+      if(currentWhData?.features?.sku&&item.sku){
+        if(skuEl)skuEl.textContent=`מק"ט: ${item.sku}`;
+        else{const ne=el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`);const info=card.querySelector('.item-info');if(info)info.insertBefore(ne,info.querySelector('.item-note')||info.querySelector('.item-qty-row'));}
+      }else if(skuEl)skuEl.remove();
       const noteEl=card.querySelector('.item-note');
       if(item.note){
         if(noteEl)noteEl.textContent=item.note;
@@ -777,6 +782,7 @@ function renderItemsList(c,whId,items,wrap){
 
     const info=el("div",{className:"item-info",style:{flex:"1",minWidth:"0"}});
     info.appendChild(el("div",{className:"item-name",style:{fontSize:"16px",fontWeight:"500",marginBottom:"2px"}},item.name));
+    if(currentWhData?.features?.sku&&item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
     if(item.note){info.appendChild(el("div",{className:"note-text item-note"},item.note))}
     const qr=el("div",{className:"item-qty-row",style:{display:"flex",alignItems:"center",gap:"8px",marginTop:"4px"}});
     qr.appendChild(el("span",{className:"item-qty",style:{fontSize:"24px",fontWeight:"700",fontVariantNumeric:"tabular-nums",color:item.quantity===0?"var(--danger)":"var(--accent)"}},String(item.quantity||0)));
@@ -794,12 +800,14 @@ function renderItemsList(c,whId,items,wrap){
           {label:"היסטוריה",value:"history"},
         ];
         if(canEdit)opts.unshift({label:"עריכה",value:"edit"});
+        if(currentWhData?.features?.sku)opts.push({label:'מק"ט',value:"sku"});
         if(memberCan('reset')&&(item.quantity||0)>0)opts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
         if(canEdit)opts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
         const choice=await showActionSheet(opts,item.name);
         if(choice==="edit")showEditItemModal(wrap,whId,itemId,item);
         else if(choice==="note")showNoteModal(wrap,whId,itemId,item);
         else if(choice==="history")showHistoryModal(wrap,item);
+        else if(choice==="sku")showSkuModal(wrap,whId,itemId,item);
         else if(choice==="reset"){
           await dbUpdate(`warehouses/${whId}`,{
             [`items/${itemId}/quantity`]:0,
@@ -957,6 +965,32 @@ function showNoteModal(parent,whId,itemId,item){
       close();
     }},"שמור");btns.appendChild(sb);m.appendChild(btns);
     setTimeout(()=>ta.focus(),100);
+  });
+}
+
+function showSkuModal(parent,whId,itemId,item){
+  showModal(parent,(m,close)=>{
+    m.appendChild(el("h3",{style:{marginBottom:"4px"}},'מק"ט'));
+    m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"16px"}},item.name));
+    const inp=el("input",{className:"app-input",placeholder:'מספר מק"ט',autocapitalize:"off"});
+    inp.value=item.sku||"";
+    m.appendChild(inp);
+    const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
+    btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
+    if(item.sku){
+      btns.appendChild(el("button",{className:"btn btn-danger btn-sm",onClick:async()=>{
+        await dbRemove(`warehouses/${whId}/items/${itemId}/sku`);close();
+      }},'מחק מק"ט'));
+    }
+    const sb=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
+      sb.disabled=true;
+      if(inp.value.trim())await dbSet(`warehouses/${whId}/items/${itemId}/sku`,inp.value.trim());
+      else await dbRemove(`warehouses/${whId}/items/${itemId}/sku`);
+      close();
+    }},"שמור");
+    btns.appendChild(sb);m.appendChild(btns);
+    inp.addEventListener("keydown",e=>{if(e.key==="Enter")sb.click()});
+    setTimeout(()=>{inp.focus();inp.select()},100);
   });
 }
 
@@ -1156,6 +1190,34 @@ function showWarehouseSettingsModal(parent,whId,wh){
           ...(perms[key]?{right:"2px"}:{left:"2px"})
         }});
         tog.appendChild(knob);row.appendChild(tog);
+        pp.appendChild(row);
+      });
+      // ── תכונות ──
+      pp.appendChild(el("div",{style:{borderTop:"1px solid var(--border)",margin:"8px 0 0"}}));
+      pp.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-muted)",padding:"10px 0 4px"}},"תכונות"));
+      const features=wh.features||{};
+      const featDefs=[{key:'sku',label:'שדה מק"ט לכל פריט',color:'var(--accent)'}];
+      featDefs.forEach(({key,label,color})=>{
+        const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid var(--border)"}});
+        row.appendChild(el("span",{style:{fontSize:"14px"}},label));
+        const tog=el("button",{style:{
+          width:"44px",height:"24px",borderRadius:"12px",border:"none",cursor:"pointer",
+          background:features[key]?color:"var(--border)",transition:"background .2s",position:"relative",flexShrink:"0"
+        },onClick:async()=>{
+          const cur=!!features[key];
+          await dbUpdate(`warehouses/${whId}`,{[`features/${key}`]:!cur});
+          features[key]=!cur;
+          if(!wh.features)wh.features={};wh.features[key]=features[key];
+          if(currentWhData){if(!currentWhData.features)currentWhData.features={};currentWhData.features[key]=features[key];}
+          tog.style.background=features[key]?color:"var(--border)";
+          knob2.style.right=features[key]?"2px":"";knob2.style.left=features[key]?"":"2px";
+        }});
+        const knob2=el("div",{style:{
+          position:"absolute",width:"20px",height:"20px",borderRadius:"50%",background:"#fff",
+          top:"2px",transition:"left .2s, right .2s",
+          ...(features[key]?{right:"2px"}:{left:"2px"})
+        }});
+        tog.appendChild(knob2);row.appendChild(tog);
         pp.appendChild(row);
       });
     }
