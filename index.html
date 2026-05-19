@@ -662,11 +662,6 @@ function renderItemsList(c,whId,items,wrap){
         if(skuEl)skuEl.textContent=`מק"ט: ${item.sku}`;
         else{const ne=el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`);const info=card.querySelector('.item-info');if(info)info.insertBefore(ne,info.querySelector('.item-note')||info.querySelector('.item-qty-row'));}
       }else if(skuEl)skuEl.remove();
-      const thumbEl=card.querySelector('.item-thumb');
-      if(item.image){
-        if(thumbEl)thumbEl.src=item.image;
-        else{const th=el("img",{src:item.image,className:"item-thumb",style:{width:"52px",height:"52px",borderRadius:"8px",objectFit:"cover",marginTop:"6px",border:"0.5px solid var(--border)",cursor:"pointer",display:"block"},onClick:e=>{e.stopPropagation();showImageViewer(item.image)}});const info=card.querySelector('.item-info');if(info)info.insertBefore(th,info.querySelector('.item-qty-row'));}
-      }else if(thumbEl)thumbEl.remove();
       const noteEl=card.querySelector('.item-note');
       if(item.note){
         if(noteEl)noteEl.textContent=item.note;
@@ -789,7 +784,6 @@ function renderItemsList(c,whId,items,wrap){
     info.appendChild(el("div",{className:"item-name",style:{fontSize:"16px",fontWeight:"500",marginBottom:"2px"}},item.name));
     if(currentWhData?.features?.sku&&item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
     if(item.note){info.appendChild(el("div",{className:"note-text item-note"},item.note))}
-    if(item.image){const thumb=el("img",{src:item.image,className:"item-thumb",style:{width:"52px",height:"52px",borderRadius:"8px",objectFit:"cover",marginTop:"6px",border:"0.5px solid var(--border)",cursor:"pointer",display:"block"},onClick:e=>{e.stopPropagation();showImageViewer(item.image)}});info.appendChild(thumb);}
     const qr=el("div",{className:"item-qty-row",style:{display:"flex",alignItems:"center",gap:"8px",marginTop:"4px"}});
     qr.appendChild(el("span",{className:"item-qty",style:{fontSize:"24px",fontWeight:"700",fontVariantNumeric:"tabular-nums",color:item.quantity===0?"var(--danger)":"var(--accent)"}},String(item.quantity||0)));
     qr.appendChild(el("span",{style:{fontSize:"12px",color:"var(--text-muted)"}},"יחידות"));
@@ -801,28 +795,45 @@ function renderItemsList(c,whId,items,wrap){
       const sb=el("button",{className:"qty-btn qty-btn-sub",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"remove")});sb.appendChild(icon("minus",18));
       const ab=el("button",{className:"qty-btn qty-btn-add",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"add")});ab.appendChild(icon("plus",18));
       const mb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:async()=>{
-        const opts=[
-          {label:"הערה",value:"note"},
-          {label:"היסטוריה",value:"history"},
-        ];
-        if(canEdit)opts.unshift({label:"עריכה",value:"edit"});
-        if(currentWhData?.features?.sku)opts.push({label:'מק"ט',value:"sku"});
-        opts.push({label:item.image?"תמונה":"הוסף תמונה",value:"image"});
-        if(memberCan('reset')&&(item.quantity||0)>0)opts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
-        if(canEdit)opts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
-        const choice=await showActionSheet(opts,item.name);
-        if(choice==="edit")showEditItemModal(wrap,whId,itemId,item);
-        else if(choice==="note")showNoteModal(wrap,whId,itemId,item);
-        else if(choice==="history")showHistoryModal(wrap,item);
-        else if(choice==="sku")showSkuModal(wrap,whId,itemId,item);
-        else if(choice==="image")showImageModal(wrap,whId,itemId,item);
-        else if(choice==="reset"){
+        // ── Main menu ──
+        const mainOpts=[];
+        if(canEdit)mainOpts.push({label:"עריכה ▸",value:"edit-sub"});
+        mainOpts.push({label:"תמונה ▸",value:"image-sub"});
+        mainOpts.push({label:"היסטוריה",value:"history"});
+        if(memberCan('reset')&&(item.quantity||0)>0)mainOpts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
+        if(canEdit)mainOpts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
+        const choice=await showActionSheet(mainOpts,item.name);
+
+        if(choice==="edit-sub"){
+          // ── עריכה sub-menu ──
+          const editOpts=[{label:"שם",value:"name"},{label:"הערה",value:"note"}];
+          if(currentWhData?.features?.sku)editOpts.push({label:'מק"ט',value:"sku"});
+          const ec=await showActionSheet(editOpts,"עריכה");
+          if(ec==="name")showEditItemModal(wrap,whId,itemId,item);
+          else if(ec==="note")showNoteModal(wrap,whId,itemId,item);
+          else if(ec==="sku")showSkuModal(wrap,whId,itemId,item);
+
+        }else if(choice==="image-sub"){
+          // ── תמונה sub-menu ──
+          const imgOpts=[];
+          if(item.image)imgOpts.push({label:"הצג תמונה",value:"view"});
+          imgOpts.push({label:item.image?"החלף תמונה":"הוסף תמונה",value:"upload"});
+          if(item.image)imgOpts.push({label:"מחק תמונה",style:"danger",value:"del-img"});
+          const ic=await showActionSheet(imgOpts,"תמונה");
+          if(ic==="view")showImageViewer(item.image);
+          else if(ic==="upload")showImageModal(wrap,whId,itemId,item);
+          else if(ic==="del-img")await dbRemove(`warehouses/${whId}/items/${itemId}/image`);
+
+        }else if(choice==="history"){
+          showHistoryModal(wrap,item);
+        }else if(choice==="reset"){
           await dbUpdate(`warehouses/${whId}`,{
             [`items/${itemId}/quantity`]:0,
             [`items/${itemId}/history/${genId()}`]:{action:"איפוס",amount:item.quantity||0,result:0,by:currentUser.displayName,date:new Date().toISOString()}
           });
+        }else if(choice==="delete"){
+          showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`));
         }
-        else if(choice==="delete")showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`));
       }});
       mb.appendChild(icon("more",18));
       actions.append(mb,sb,ab);
