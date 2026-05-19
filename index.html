@@ -662,6 +662,11 @@ function renderItemsList(c,whId,items,wrap){
         if(skuEl)skuEl.textContent=`מק"ט: ${item.sku}`;
         else{const ne=el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`);const info=card.querySelector('.item-info');if(info)info.insertBefore(ne,info.querySelector('.item-note')||info.querySelector('.item-qty-row'));}
       }else if(skuEl)skuEl.remove();
+      const thumbEl=card.querySelector('.item-thumb');
+      if(item.image){
+        if(thumbEl)thumbEl.src=item.image;
+        else{const th=el("img",{src:item.image,className:"item-thumb",style:{width:"52px",height:"52px",borderRadius:"8px",objectFit:"cover",marginTop:"6px",border:"0.5px solid var(--border)",cursor:"pointer",display:"block"},onClick:e=>{e.stopPropagation();showImageViewer(item.image)}});const info=card.querySelector('.item-info');if(info)info.insertBefore(th,info.querySelector('.item-qty-row'));}
+      }else if(thumbEl)thumbEl.remove();
       const noteEl=card.querySelector('.item-note');
       if(item.note){
         if(noteEl)noteEl.textContent=item.note;
@@ -784,6 +789,7 @@ function renderItemsList(c,whId,items,wrap){
     info.appendChild(el("div",{className:"item-name",style:{fontSize:"16px",fontWeight:"500",marginBottom:"2px"}},item.name));
     if(currentWhData?.features?.sku&&item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
     if(item.note){info.appendChild(el("div",{className:"note-text item-note"},item.note))}
+    if(item.image){const thumb=el("img",{src:item.image,className:"item-thumb",style:{width:"52px",height:"52px",borderRadius:"8px",objectFit:"cover",marginTop:"6px",border:"0.5px solid var(--border)",cursor:"pointer",display:"block"},onClick:e=>{e.stopPropagation();showImageViewer(item.image)}});info.appendChild(thumb);}
     const qr=el("div",{className:"item-qty-row",style:{display:"flex",alignItems:"center",gap:"8px",marginTop:"4px"}});
     qr.appendChild(el("span",{className:"item-qty",style:{fontSize:"24px",fontWeight:"700",fontVariantNumeric:"tabular-nums",color:item.quantity===0?"var(--danger)":"var(--accent)"}},String(item.quantity||0)));
     qr.appendChild(el("span",{style:{fontSize:"12px",color:"var(--text-muted)"}},"יחידות"));
@@ -801,6 +807,7 @@ function renderItemsList(c,whId,items,wrap){
         ];
         if(canEdit)opts.unshift({label:"עריכה",value:"edit"});
         if(currentWhData?.features?.sku)opts.push({label:'מק"ט',value:"sku"});
+        opts.push({label:item.image?"תמונה":"הוסף תמונה",value:"image"});
         if(memberCan('reset')&&(item.quantity||0)>0)opts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
         if(canEdit)opts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
         const choice=await showActionSheet(opts,item.name);
@@ -808,6 +815,7 @@ function renderItemsList(c,whId,items,wrap){
         else if(choice==="note")showNoteModal(wrap,whId,itemId,item);
         else if(choice==="history")showHistoryModal(wrap,item);
         else if(choice==="sku")showSkuModal(wrap,whId,itemId,item);
+        else if(choice==="image")showImageModal(wrap,whId,itemId,item);
         else if(choice==="reset"){
           await dbUpdate(`warehouses/${whId}`,{
             [`items/${itemId}/quantity`]:0,
@@ -823,6 +831,30 @@ function renderItemsList(c,whId,items,wrap){
     itemsContainer.appendChild(card);
   });
   listContainer.appendChild(itemsContainer);
+}
+
+// ═══════════ IMAGE HELPERS ═══════════
+function resizeAndEncodeImage(file,maxPx,quality,cb){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}
+      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      cb(canvas.toDataURL('image/jpeg',quality));
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function showImageViewer(imgData){
+  const ov=el('div',{style:{position:'fixed',inset:'0',zIndex:'5000',background:'rgba(0,0,0,0.96)',display:'flex',alignItems:'center',justifyContent:'center'},onClick:()=>ov.remove()});
+  const img=el('img',{src:imgData,style:{maxWidth:'92vw',maxHeight:'88vh',borderRadius:'14px',objectFit:'contain',boxShadow:'0 20px 60px rgba(0,0,0,0.6)'}});
+  const closeHint=el('div',{style:{position:'absolute',bottom:'24px',left:'0',right:'0',textAlign:'center',fontSize:'13px',color:'rgba(255,255,255,0.4)'}},'הקש לסגירה');
+  ov.append(img,closeHint);document.body.appendChild(ov);
 }
 
 // ═══════════ MODALS ═══════════
@@ -972,7 +1004,7 @@ function showSkuModal(parent,whId,itemId,item){
   showModal(parent,(m,close)=>{
     m.appendChild(el("h3",{style:{marginBottom:"4px"}},'מק"ט'));
     m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"16px"}},item.name));
-    const inp=el("input",{className:"app-input",placeholder:'מספר מק"ט',autocapitalize:"off"});
+    const inp=el("input",{className:"app-input",placeholder:'מספר מק"ט',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off"});
     inp.value=item.sku||"";
     m.appendChild(inp);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
@@ -991,6 +1023,37 @@ function showSkuModal(parent,whId,itemId,item){
     btns.appendChild(sb);m.appendChild(btns);
     inp.addEventListener("keydown",e=>{if(e.key==="Enter")sb.click()});
     setTimeout(()=>{inp.focus();inp.select()},100);
+  });
+}
+
+function showImageModal(parent,whId,itemId,item){
+  showModal(parent,(m,close)=>{
+    m.appendChild(el("h3",{style:{marginBottom:"4px"}},"תמונה"));
+    m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"14px"}},item.name));
+    if(item.image){
+      const prev=el("img",{src:item.image,style:{width:"100%",borderRadius:"12px",marginBottom:"14px",objectFit:"cover",maxHeight:"220px",cursor:"pointer"},onClick:()=>showImageViewer(item.image)});
+      m.appendChild(prev);
+    }
+    const fileInput=el("input",{type:"file",accept:"image/*",style:{display:"none"}});
+    fileInput.addEventListener("change",async e=>{
+      const file=e.target.files[0];if(!file)return;
+      const uploadBtn=m.querySelector('.img-upload-btn');if(uploadBtn){uploadBtn.disabled=true;uploadBtn.textContent="מעלה...";}
+      resizeAndEncodeImage(file,800,0.72,async data=>{
+        await dbSet(`warehouses/${whId}/items/${itemId}/image`,data);
+        close();
+      });
+    });
+    m.appendChild(fileInput);
+    const btns=el("div",{style:{display:"flex",gap:"8px",flexWrap:"wrap"}});
+    btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
+    const uploadBtn=el("button",{className:"btn btn-primary img-upload-btn",style:{flex:"1"},onClick:()=>fileInput.click()},item.image?"החלף תמונה":"בחר תמונה");
+    btns.appendChild(uploadBtn);
+    if(item.image){
+      btns.appendChild(el("button",{className:"btn btn-danger btn-sm",onClick:async()=>{
+        await dbRemove(`warehouses/${whId}/items/${itemId}/image`);close();
+      }},"מחק"));
+    }
+    m.appendChild(btns);
   });
 }
 
