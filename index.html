@@ -99,16 +99,16 @@
     .toolbar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
     .toolbar-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:12px;display:flex;align-items:center;gap:4px;transition:all .2s;white-space:nowrap}
     @keyframes sheetUp{from{transform:translateY(110%)}to{transform:translateY(0)}}
-    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.22);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:flex;flex-direction:column;justify-content:flex-end;padding:0 10px max(env(safe-area-inset-bottom),16px);animation:fadeIn .22s ease}
-    .action-sheet-group{border-radius:18px;overflow:hidden;margin-bottom:10px;animation:sheetUp .38s cubic-bezier(0.32,0.72,0,1);position:relative;background:rgba(8,8,12,0.45);-webkit-backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);border:0.5px solid rgba(255,255,255,0.22);box-shadow:0 30px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.18),inset 0 -1px 0 rgba(0,0,0,0.25)}
-    .action-sheet-item{width:100%;padding:18px 20px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#4f9bff;transition:background .12s;-webkit-tap-highlight-color:transparent}
-    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(255,255,255,0.13)}
-    .action-sheet-item:active{background:rgba(255,255,255,0.09)}
+    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.30);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;flex-direction:column;justify-content:flex-end;padding:0 8px max(env(safe-area-inset-bottom),12px);animation:fadeIn .22s ease}
+    .action-sheet-group,.action-sheet-cancel-group{border-radius:22px;overflow:hidden;margin-bottom:8px;animation:sheetUp .42s cubic-bezier(0.32,0.72,0,1);position:relative;background:rgba(255,255,255,0.07);-webkit-backdrop-filter:blur(50px) saturate(220%) brightness(1.10);backdrop-filter:blur(50px) saturate(220%) brightness(1.10);box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.16),inset 0 1px 0.5px rgba(255,255,255,0.36),inset 0 -1px 0.5px rgba(0,0,0,0.18),0 16px 48px rgba(0,0,0,0.45)}
+    .action-sheet-group::before,.action-sheet-cancel-group::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.02) 30%,transparent 60%,rgba(255,255,255,0.05));pointer-events:none;border-radius:inherit;z-index:0}
+    .action-sheet-item{width:100%;padding:17px 20px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#0a84ff;position:relative;z-index:1;transition:background .12s;-webkit-tap-highlight-color:transparent}
+    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(255,255,255,0.10)}
+    .action-sheet-item:active{background:rgba(255,255,255,0.13)}
     .action-sheet-item.danger{color:#ff453a}
-    .action-sheet-cancel-group{border-radius:18px;overflow:hidden;margin-bottom:10px;animation:sheetUp .38s cubic-bezier(0.32,0.72,0,1);background:rgba(8,8,12,0.52);-webkit-backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);backdrop-filter:blur(60px) saturate(2.2) brightness(1.15);border:0.5px solid rgba(255,255,255,0.22);box-shadow:0 30px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.18)}
-    .action-sheet-cancel{width:100%;padding:18px 20px;text-align:center;font-size:17px;font-weight:600;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:var(--text);-webkit-tap-highlight-color:transparent}
-    .action-sheet-cancel:active{background:rgba(255,255,255,0.09)}
-    .scroll-top-btn{position:fixed;bottom:100px;left:20px;width:46px;height:46px;border-radius:50%;background:rgba(8,8,12,0.55);-webkit-backdrop-filter:blur(40px) saturate(2.2) brightness(1.15);backdrop-filter:blur(40px) saturate(2.2) brightness(1.15);border:0.5px solid rgba(255,255,255,0.22);color:var(--accent);cursor:pointer;display:none;align-items:center;justify-content:center;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.18);opacity:0;transform:translateY(8px);transition:opacity .25s ease, transform .25s ease}
+    .action-sheet-cancel{width:100%;padding:17px 20px;text-align:center;font-size:17px;font-weight:600;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#fff;position:relative;z-index:1;-webkit-tap-highlight-color:transparent}
+    .action-sheet-cancel:active{background:rgba(255,255,255,0.13)}
+    .scroll-top-btn{position:fixed;bottom:100px;left:20px;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,0.10);-webkit-backdrop-filter:blur(40px) saturate(200%) brightness(1.10);backdrop-filter:blur(40px) saturate(200%) brightness(1.10);border:none;color:#0a84ff;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:80;box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.18),inset 0 1px 0.5px rgba(255,255,255,0.34),0 8px 24px rgba(0,0,0,0.45);opacity:0;transform:translateY(8px);transition:opacity .25s ease, transform .25s ease}
     .scroll-top-btn.visible{display:flex;opacity:1;transform:translateY(0)}
     .toolbar-btn:hover,.toolbar-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
     .toolbar-btn.danger-hover:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
@@ -795,44 +795,55 @@ function renderItemsList(c,whId,items,wrap){
       const sb=el("button",{className:"qty-btn qty-btn-sub",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"remove")});sb.appendChild(icon("minus",18));
       const ab=el("button",{className:"qty-btn qty-btn-add",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"add")});ab.appendChild(icon("plus",18));
       const mb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:async()=>{
-        // ── Main menu ──
-        const mainOpts=[];
-        if(canEdit)mainOpts.push({label:"עריכה ▸",value:"edit-sub"});
-        mainOpts.push({label:"תמונה ▸",value:"image-sub"});
-        mainOpts.push({label:"היסטוריה",value:"history"});
-        if(memberCan('reset')&&(item.quantity||0)>0)mainOpts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
-        if(canEdit)mainOpts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
-        const choice=await showActionSheet(mainOpts,item.name);
+        // Main menu loop — sub-menu cancel returns here; inline actions keep it open
+        while(true){
+          const mainOpts=[];
+          if(canEdit)mainOpts.push({label:"עריכה ▸",value:"edit-sub"});
+          mainOpts.push({label:"תמונה ▸",value:"image-sub"});
+          mainOpts.push({label:"היסטוריה",value:"history"});
+          if(memberCan('reset')&&(item.quantity||0)>0)mainOpts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
+          if(canEdit)mainOpts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
+          const choice=await showActionSheet(mainOpts,item.name);
+          if(!choice)return; // closed
 
-        if(choice==="edit-sub"){
-          // ── עריכה sub-menu ──
-          const editOpts=[{label:"שם",value:"name"},{label:"הערה",value:"note"}];
-          if(currentWhData?.features?.sku)editOpts.push({label:'מק"ט',value:"sku"});
-          const ec=await showActionSheet(editOpts,"עריכה");
-          if(ec==="name")showEditItemModal(wrap,whId,itemId,item);
-          else if(ec==="note")showNoteModal(wrap,whId,itemId,item);
-          else if(ec==="sku")showSkuModal(wrap,whId,itemId,item);
-
-        }else if(choice==="image-sub"){
-          // ── תמונה sub-menu ──
-          const imgOpts=[];
-          if(item.image)imgOpts.push({label:"הצג תמונה",value:"view"});
-          imgOpts.push({label:item.image?"החלף תמונה":"הוסף תמונה",value:"upload"});
-          if(item.image)imgOpts.push({label:"מחק תמונה",style:"danger",value:"del-img"});
-          const ic=await showActionSheet(imgOpts,"תמונה");
-          if(ic==="view")showImageViewer(item.image);
-          else if(ic==="upload")showImageModal(wrap,whId,itemId,item);
-          else if(ic==="del-img")await dbRemove(`warehouses/${whId}/items/${itemId}/image`);
-
-        }else if(choice==="history"){
-          showHistoryModal(wrap,item);
-        }else if(choice==="reset"){
-          await dbUpdate(`warehouses/${whId}`,{
-            [`items/${itemId}/quantity`]:0,
-            [`items/${itemId}/history/${genId()}`]:{action:"איפוס",amount:item.quantity||0,result:0,by:currentUser.displayName,date:new Date().toISOString()}
-          });
-        }else if(choice==="delete"){
-          showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`));
+          if(choice==="edit-sub"){
+            const editOpts=[{label:"שם",value:"name"},{label:"הערה",value:"note"}];
+            if(currentWhData?.features?.sku)editOpts.push({label:'מק"ט',value:"sku"});
+            const ec=await showActionSheet(editOpts,"עריכה");
+            if(ec==="name"){showEditItemModal(wrap,whId,itemId,item);return;}
+            else if(ec==="note"){showNoteModal(wrap,whId,itemId,item);return;}
+            else if(ec==="sku"){showSkuModal(wrap,whId,itemId,item);return;}
+            // cancelled — loop back to main
+          }else if(choice==="image-sub"){
+            // Image sub-menu loop — delete stays in sub-menu
+            while(true){
+              const imgOpts=[];
+              if(item.image)imgOpts.push({label:"הצג תמונה",value:"view"});
+              imgOpts.push({label:item.image?"החלף תמונה":"הוסף תמונה",value:"upload"});
+              if(item.image)imgOpts.push({label:"מחק תמונה",style:"danger",value:"del-img"});
+              const ic=await showActionSheet(imgOpts,"תמונה");
+              if(!ic)break; // back to main loop
+              if(ic==="view"){showImageViewer(item.image);return;}
+              if(ic==="upload"){showImageModal(wrap,whId,itemId,item);return;}
+              if(ic==="del-img"){
+                await dbRemove(`warehouses/${whId}/items/${itemId}/image`);
+                delete item.image;
+                // continue inner loop — sub-menu reopens (now only "הוסף תמונה")
+              }
+            }
+          }else if(choice==="history"){
+            showHistoryModal(wrap,item);return;
+          }else if(choice==="reset"){
+            await dbUpdate(`warehouses/${whId}`,{
+              [`items/${itemId}/quantity`]:0,
+              [`items/${itemId}/history/${genId()}`]:{action:"איפוס",amount:item.quantity||0,result:0,by:currentUser.displayName,date:new Date().toISOString()}
+            });
+            item.quantity=0;
+            // stay in main loop
+          }else if(choice==="delete"){
+            showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`));
+            return;
+          }
         }
       }});
       mb.appendChild(icon("more",18));
