@@ -798,8 +798,8 @@ function renderItemsList(c,whId,items,wrap){
         // Main menu loop — sub-menu cancel returns here; inline actions keep it open
         while(true){
           const mainOpts=[];
-          if(canEdit)mainOpts.push({label:"עריכה ▸",value:"edit-sub"});
-          mainOpts.push({label:"תמונה ▸",value:"image-sub"});
+          if(canEdit)mainOpts.push({label:"עריכה >",value:"edit-sub"});
+          mainOpts.push({label:"תמונה >",value:"image-sub"});
           mainOpts.push({label:"היסטוריה",value:"history"});
           if(memberCan('reset')&&(item.quantity||0)>0)mainOpts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
           if(canEdit)mainOpts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
