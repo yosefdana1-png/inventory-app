@@ -115,6 +115,7 @@
     .note-text{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .drag-handle{cursor:grab;touch-action:none;color:var(--text-muted);padding:4px}
     .drag-handle:active{cursor:grabbing}
+    .item-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;cursor:pointer;flex-shrink:0;margin-left:10px;border:1px solid var(--border)}
   </style>
 
 </head>
@@ -657,6 +658,12 @@ function renderItemsList(c,whId,items,wrap){
       }
       const nameEl=card.querySelector('.item-name');
       if(nameEl&&nameEl.textContent!==item.name)nameEl.textContent=item.name;
+      const showImgs=currentWhData?.features?.showImages!==false;
+      const thumbEl=card.querySelector('.item-thumb');
+      if(showImgs&&item.image){
+        if(thumbEl){if(thumbEl.src!==item.image)thumbEl.src=item.image;}
+        else{const t=el("img",{className:"item-thumb",src:item.image,onClick:()=>showImageViewer(item.image)});card.insertBefore(t,card.firstChild);}
+      }else if(thumbEl)thumbEl.remove();
       const skuEl=card.querySelector('.item-sku');
       if(item.sku){
         if(skuEl)skuEl.textContent=`מק"ט: ${item.sku}`;
@@ -780,6 +787,10 @@ function renderItemsList(c,whId,items,wrap){
       });
     }
 
+    if(currentWhData?.features?.showImages!==false&&item.image&&!reorderMode){
+      const thumb=el("img",{className:"item-thumb",src:item.image,onClick:()=>showImageViewer(item.image)});
+      card.appendChild(thumb);
+    }
     const info=el("div",{className:"item-info",style:{flex:"1",minWidth:"0"}});
     info.appendChild(el("div",{className:"item-name",style:{fontSize:"16px",fontWeight:"500",marginBottom:"2px"}},item.name));
     if(item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
@@ -1276,6 +1287,28 @@ function showWarehouseSettingsModal(parent,whId,wh){
         tog.appendChild(knob);row.appendChild(tog);
         pp.appendChild(row);
       });
+      // ── תכונות ──
+      pp.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-muted)",padding:"12px 0 4px"}},"תצוגה"));
+      const features=wh.features||{};
+      const showImgsOn=features.showImages!==false;
+      const frow=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0"}});
+      frow.appendChild(el("span",{style:{fontSize:"14px"}},"הצג תמונות על פריטים"));
+      const ftog=el("button",{style:{
+        width:"44px",height:"24px",borderRadius:"12px",border:"none",cursor:"pointer",
+        background:showImgsOn?"var(--accent)":"var(--border)",transition:"background .2s",position:"relative",flexShrink:"0"
+      },onClick:async()=>{
+        const cur=features.showImages!==false;
+        const next=!cur;
+        await dbUpdate(`warehouses/${whId}`,{['features/showImages']:next});
+        features.showImages=next;
+        if(!wh.features)wh.features={};wh.features.showImages=next;
+        if(currentWhData){if(!currentWhData.features)currentWhData.features={};currentWhData.features.showImages=next;}
+        ftog.style.background=next?"var(--accent)":"var(--border)";
+        fknob.style.right=next?"2px":"";fknob.style.left=next?"":"2px";
+      }});
+      const fknob=el("div",{style:{position:"absolute",width:"20px",height:"20px",borderRadius:"50%",background:"#fff",top:"2px",transition:"left .2s, right .2s",...(showImgsOn?{right:"2px"}:{left:"2px"})}});
+      ftog.appendChild(fknob);frow.appendChild(ftog);
+      pp.appendChild(frow);
     }
 
     // ── סידור ──
