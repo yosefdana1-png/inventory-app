@@ -115,7 +115,8 @@
     .note-text{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .drag-handle{cursor:grab;touch-action:none;color:var(--text-muted);padding:4px}
     .drag-handle:active{cursor:grabbing}
-    .item-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;cursor:pointer;flex-shrink:0;margin-left:10px;border:1px solid var(--border)}
+    .item-img-slot{width:56px;height:56px;flex-shrink:0;margin-right:10px;border-radius:10px}
+    .item-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;cursor:pointer;border:1px solid var(--border);display:block}
   </style>
 
 </head>
@@ -659,11 +660,14 @@ function renderItemsList(c,whId,items,wrap){
       const nameEl=card.querySelector('.item-name');
       if(nameEl&&nameEl.textContent!==item.name)nameEl.textContent=item.name;
       const showImgs=currentWhData?.features?.showImages!==false;
-      const thumbEl=card.querySelector('.item-thumb');
-      if(showImgs&&item.image){
-        if(thumbEl){if(thumbEl.src!==item.image)thumbEl.src=item.image;}
-        else{const t=el("img",{className:"item-thumb",src:item.image,onClick:()=>showImageViewer(item.image)});card.insertBefore(t,card.firstChild);}
-      }else if(thumbEl)thumbEl.remove();
+      const slotEl=card.querySelector('.item-img-slot');
+      if(showImgs){
+        if(slotEl){
+          const thumbEl=slotEl.querySelector('.item-thumb');
+          if(item.image){if(thumbEl){if(thumbEl.src!==item.image)thumbEl.src=item.image;}else{const t=el("img",{className:"item-thumb",src:item.image,onClick:()=>showImageViewer(item.image)});slotEl.appendChild(t);}}
+          else if(thumbEl)thumbEl.remove();
+        }
+      }else if(slotEl)slotEl.remove();
       const skuEl=card.querySelector('.item-sku');
       if(item.sku){
         if(skuEl)skuEl.textContent=`מק"ט: ${item.sku}`;
@@ -787,10 +791,6 @@ function renderItemsList(c,whId,items,wrap){
       });
     }
 
-    if(currentWhData?.features?.showImages!==false&&item.image&&!reorderMode){
-      const thumb=el("img",{className:"item-thumb",src:item.image,onClick:()=>showImageViewer(item.image)});
-      card.appendChild(thumb);
-    }
     const info=el("div",{className:"item-info",style:{flex:"1",minWidth:"0"}});
     info.appendChild(el("div",{className:"item-name",style:{fontSize:"16px",fontWeight:"500",marginBottom:"2px"}},item.name));
     if(item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
@@ -859,7 +859,14 @@ function renderItemsList(c,whId,items,wrap){
       mb.appendChild(icon("more",18));
       actions.append(mb,sb,ab);
     }
-    card.append(info,actions);
+    // Image slot always reserved when feature on — keeps text at uniform position
+    if(currentWhData?.features?.showImages!==false&&!reorderMode){
+      const slot=el("div",{className:"item-img-slot"});
+      if(item.image){const t=el("img",{className:"item-thumb",src:item.image,onClick:()=>showImageViewer(item.image)});slot.appendChild(t);}
+      card.append(info,slot,actions);
+    }else{
+      card.append(info,actions);
+    }
     itemsContainer.appendChild(card);
   });
   listContainer.appendChild(itemsContainer);
