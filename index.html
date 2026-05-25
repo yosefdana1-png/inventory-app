@@ -668,8 +668,9 @@ function renderItemsList(c,whId,items,wrap){
           else if(thumbEl)thumbEl.remove();
         }
       }else if(slotEl)slotEl.remove();
+      const showSku=currentWhData?.features?.showSku!==false;
       const skuEl=card.querySelector('.item-sku');
-      if(item.sku){
+      if(showSku&&item.sku){
         if(skuEl)skuEl.textContent=`מק"ט: ${item.sku}`;
         else{const ne=el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`);const info=card.querySelector('.item-info');if(info)info.insertBefore(ne,info.querySelector('.item-note')||info.querySelector('.item-qty-row'));}
       }else if(skuEl)skuEl.remove();
@@ -793,7 +794,7 @@ function renderItemsList(c,whId,items,wrap){
 
     const info=el("div",{className:"item-info",style:{flex:"1",minWidth:"0"}});
     info.appendChild(el("div",{className:"item-name",style:{fontSize:"16px",fontWeight:"500",marginBottom:"2px"}},item.name));
-    if(item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
+    if(currentWhData?.features?.showSku!==false&&item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
     if(item.note){info.appendChild(el("div",{className:"note-text item-note"},item.note))}
     const qr=el("div",{className:"item-qty-row",style:{display:"flex",alignItems:"center",gap:"8px",marginTop:"4px"}});
     qr.appendChild(el("span",{className:"item-qty",style:{fontSize:"24px",fontWeight:"700",fontVariantNumeric:"tabular-nums",color:item.quantity===0?"var(--danger)":"var(--accent)"}},String(item.quantity||0)));
@@ -1146,7 +1147,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
   showModal(parent,(m,close)=>{
     m.style.maxHeight='none';m.style.overflow='visible';
     m.appendChild(el("h3",{style:{marginBottom:"16px"}},"הגדרות מחסן"));
-    const tabs=isAdmin?['חברים','הרשאות','סידור']:['חברים'];
+    const tabs=isAdmin?['חברים','הרשאות','סידור','תצוגה']:['חברים'];
     const tabBar=el("div",{className:"tab-bar"});
     const panelWrap=el("div",{style:{height:"320px",overflowY:"auto",direction:"ltr"}});
     const panelEls={};
@@ -1294,28 +1295,31 @@ function showWarehouseSettingsModal(parent,whId,wh){
         tog.appendChild(knob);row.appendChild(tog);
         pp.appendChild(row);
       });
-      // ── תכונות ──
-      pp.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-muted)",padding:"12px 0 4px"}},"תצוגה"));
+    }
+
+    // ── תצוגה ──
+    if(isAdmin&&panelEls['תצוגה']){
+      const dp=panelEls['תצוגה'];
       const features=wh.features||{};
-      const showImgsOn=features.showImages!==false;
-      const frow=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0"}});
-      frow.appendChild(el("span",{style:{fontSize:"14px"}},"הצג תמונות על פריטים"));
-      const ftog=el("button",{style:{
-        width:"44px",height:"24px",borderRadius:"12px",border:"none",cursor:"pointer",
-        background:showImgsOn?"var(--accent)":"var(--border)",transition:"background .2s",position:"relative",flexShrink:"0"
-      },onClick:async()=>{
-        const cur=features.showImages!==false;
-        const next=!cur;
-        await dbUpdate(`warehouses/${whId}`,{['features/showImages']:next});
-        features.showImages=next;
-        if(!wh.features)wh.features={};wh.features.showImages=next;
-        if(currentWhData){if(!currentWhData.features)currentWhData.features={};currentWhData.features.showImages=next;}
-        ftog.style.background=next?"var(--accent)":"var(--border)";
-        fknob.style.right=next?"2px":"";fknob.style.left=next?"":"2px";
-      }});
-      const fknob=el("div",{style:{position:"absolute",width:"20px",height:"20px",borderRadius:"50%",background:"#fff",top:"2px",transition:"left .2s, right .2s",...(showImgsOn?{right:"2px"}:{left:"2px"})}});
-      ftog.appendChild(fknob);frow.appendChild(ftog);
-      pp.appendChild(frow);
+      function makeDisplayToggle(label,featKey,defaultOn){
+        const on=features[featKey]!==false;
+        const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid var(--border)"}});
+        row.appendChild(el("span",{style:{fontSize:"14px"}},label));
+        const tog=el("button",{style:{width:"44px",height:"24px",borderRadius:"12px",border:"none",cursor:"pointer",background:on?"var(--accent)":"var(--border)",transition:"background .2s",position:"relative",flexShrink:"0"}
+        ,onClick:async()=>{
+          const next=features[featKey]===false;
+          await dbUpdate(`warehouses/${whId}`,{[`features/${featKey}`]:next});
+          features[featKey]=next;
+          if(!wh.features)wh.features={};wh.features[featKey]=next;
+          if(currentWhData){if(!currentWhData.features)currentWhData.features={};currentWhData.features[featKey]=next;}
+          tog.style.background=next?"var(--accent)":"var(--border)";
+          knob.style.right=next?"2px":"";knob.style.left=next?"":"2px";
+        }});
+        const knob=el("div",{style:{position:"absolute",width:"20px",height:"20px",borderRadius:"50%",background:"#fff",top:"2px",transition:"left .2s, right .2s",...(on?{right:"2px"}:{left:"2px"})}});
+        tog.appendChild(knob);row.appendChild(tog);dp.appendChild(row);
+      }
+      makeDisplayToggle('הצג מק"ט על פריטים','showSku');
+      makeDisplayToggle('הצג תמונות על פריטים','showImages');
     }
 
     // ── סידור ──
