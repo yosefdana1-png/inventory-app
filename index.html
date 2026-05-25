@@ -99,15 +99,15 @@
     .toolbar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
     .toolbar-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:12px;display:flex;align-items:center;gap:4px;transition:all .2s;white-space:nowrap}
     @keyframes sheetUp{from{transform:translateY(110%)}to{transform:translateY(0)}}
-    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.32);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;flex-direction:column;justify-content:flex-end;padding:0 8px max(env(safe-area-inset-bottom),12px);animation:fadeIn .22s ease}
-    .action-sheet-group,.action-sheet-cancel-group{border-radius:22px;overflow:hidden;margin-bottom:8px;animation:sheetUp .42s cubic-bezier(0.32,0.72,0,1);position:relative;background:rgba(255,255,255,0.82);-webkit-backdrop-filter:blur(80px) saturate(160%);backdrop-filter:blur(80px) saturate(160%);box-shadow:0 8px 40px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.95)}
-    .action-sheet-group::before,.action-sheet-cancel-group::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.45) 0%,rgba(255,255,255,0.0) 35%);pointer-events:none;border-radius:inherit;z-index:0}
-    .action-sheet-item{width:100%;padding:17px 20px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#007aff;position:relative;z-index:1;transition:background .12s;-webkit-tap-highlight-color:transparent}
-    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(0,0,0,0.10)}
-    .action-sheet-item:active{background:rgba(0,0,0,0.06)}
-    .action-sheet-item.danger{color:#ff3b30}
-    .action-sheet-cancel{width:100%;padding:17px 20px;text-align:center;font-size:17px;font-weight:600;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#007aff;position:relative;z-index:1;-webkit-tap-highlight-color:transparent}
-    .action-sheet-cancel:active{background:rgba(0,0,0,0.06)}
+    .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.25);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:flex;flex-direction:column;justify-content:flex-end;padding:0 8px max(env(safe-area-inset-bottom),12px);animation:fadeIn .22s ease}
+    .action-sheet-group,.action-sheet-cancel-group{border-radius:22px;overflow:hidden;margin-bottom:8px;animation:sheetUp .42s cubic-bezier(0.32,0.72,0,1);position:relative;background:rgba(255,255,255,0.14);-webkit-backdrop-filter:blur(80px) saturate(180%) brightness(1.12);backdrop-filter:blur(80px) saturate(180%) brightness(1.12);box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.30),inset 0 2px 1px rgba(255,255,255,0.50),inset 0 -1px 1px rgba(0,0,0,0.10),0 20px 60px rgba(0,0,0,0.50)}
+    .action-sheet-group::before,.action-sheet-cancel-group::before{content:'';position:absolute;inset:0;background:linear-gradient(175deg,rgba(255,255,255,0.22) 0%,rgba(255,255,255,0.06) 25%,transparent 55%,rgba(255,255,255,0.04) 100%);pointer-events:none;border-radius:inherit;z-index:0}
+    .action-sheet-item{width:100%;padding:17px 20px;text-align:center;font-size:17px;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#0a84ff;position:relative;z-index:1;transition:background .12s;-webkit-tap-highlight-color:transparent}
+    .action-sheet-item:not(:last-child){border-bottom:0.5px solid rgba(255,255,255,0.14)}
+    .action-sheet-item:active{background:rgba(255,255,255,0.16)}
+    .action-sheet-item.danger{color:#ff453a}
+    .action-sheet-cancel{width:100%;padding:17px 20px;text-align:center;font-size:17px;font-weight:600;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:#fff;position:relative;z-index:1;-webkit-tap-highlight-color:transparent}
+    .action-sheet-cancel:active{background:rgba(255,255,255,0.16)}
     .scroll-top-btn{position:fixed;bottom:100px;left:20px;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,0.14);-webkit-backdrop-filter:blur(80px) saturate(180%) brightness(1.12);backdrop-filter:blur(80px) saturate(180%) brightness(1.12);border:none;color:#0a84ff;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:80;box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.30),inset 0 2px 1px rgba(255,255,255,0.50),0 8px 24px rgba(0,0,0,0.50);opacity:0;transform:translateY(8px);transition:opacity .25s ease, transform .25s ease}
     .scroll-top-btn.visible{display:flex;opacity:1;transform:translateY(0)}
     .toolbar-btn:hover,.toolbar-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
@@ -903,8 +903,8 @@ function showActionSheet(items,title){
     const ov=el("div",{className:"action-sheet-overlay",onClick:e=>{if(e.target===ov){ov.remove();resolve(null)}}});
     const mainGroup=el("div",{className:"action-sheet-group"});
     if(title){
-      const hdr=el("div",{style:{padding:"14px 20px 10px",textAlign:"center",borderBottom:"0.5px solid rgba(0,0,0,0.10)"}});
-      hdr.appendChild(el("span",{style:{fontSize:"13px",color:"rgba(0,0,0,0.40)",fontWeight:"500"}},title));
+      const hdr=el("div",{style:{padding:"14px 20px 10px",textAlign:"center",borderBottom:"0.5px solid rgba(255,255,255,0.11)"}});
+      hdr.appendChild(el("span",{style:{fontSize:"13px",color:"rgba(255,255,255,0.45)",fontWeight:"500"}},title));
       mainGroup.appendChild(hdr);
     }
     items.forEach(({label,style:s,value})=>{
