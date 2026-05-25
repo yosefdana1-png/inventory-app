@@ -332,8 +332,10 @@ function renderHome(){
     // Reattach warehouse list listener only
     homeUnsubs.forEach(f=>f());homeUnsubs=[];
     const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
-      const whIds=data?Object.keys(data):[];
-      renderWarehouseList(cachedHomeContent,whIds,homeScreen);
+      const entries=data?Object.entries(data):[];
+      entries.sort((a,b)=>(typeof a[1]==='number'?a[1]:0)-(typeof b[1]==='number'?b[1]:0));
+      lastHomeWhIds=entries.map(([id])=>id);
+      renderWarehouseList(cachedHomeContent,lastHomeWhIds,homeScreen);
     });
     homeUnsubs.push(u);
     return;
@@ -348,9 +350,16 @@ function renderHome(){
   const hl=el("div",{style:{display:"flex",gap:"8px",alignItems:"center"}});
   const rb=el("button",{className:"icon-btn",onClick:()=>{rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),600)}});
   rb.appendChild(icon("refresh",18));
+  const sortWhBtn=el("button",{className:"icon-btn",style:{color:"var(--text-sec)"},onClick:()=>{
+    whReorderMode=!whReorderMode;
+    sortWhBtn.style.color=whReorderMode?"var(--accent)":"var(--text-sec)";
+    currentWhIds=[];
+    renderWarehouseList(content,lastHomeWhIds,wrap);
+  }});
+  sortWhBtn.appendChild(icon("sort",18));
   const sb=el("button",{className:"icon-btn",onClick:()=>showSettingsModal(wrap)});
   sb.appendChild(icon("settings",20));
-  hl.append(rb,sb);header.append(hr,hl);wrap.appendChild(header);
+  hl.append(rb,sortWhBtn,sb);header.append(hr,hl);wrap.appendChild(header);
   const content=el("div",{style:{padding:"16px 16px 0"}});wrap.appendChild(content);
   const fab=el("button",{className:"fab",onClick:()=>showNewListModal(wrap)});
   fab.appendChild(icon("plus",24));wrap.appendChild(fab);
@@ -360,8 +369,10 @@ function renderHome(){
   navInit();
   navShowHome(false);
   const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
-    const whIds=data?Object.keys(data):[];
-    renderWarehouseList(content,whIds,wrap);
+    const entries=data?Object.entries(data):[];
+    entries.sort((a,b)=>(typeof a[1]==='number'?a[1]:0)-(typeof b[1]==='number'?b[1]:0));
+    lastHomeWhIds=entries.map(([id])=>id);
+    renderWarehouseList(content,lastHomeWhIds,wrap);
   });
   homeUnsubs.push(u);unsubscribers.push(u);
 }
@@ -409,20 +420,22 @@ function renderWarehouseList(c,whIds,wrap){
 }
 
 function buildWarehouseCard(cardWrapper,whId,wh,wrap){
-  // Check if we can update in-place
   const existing=cardWrapper.querySelector('.list-card');
   if(existing){
-    const countEl=existing.querySelector('.wh-count');
-    const totalEl=existing.querySelector('.wh-total');
-    const items=wh.items?Object.values(wh.items):[];
-    const total=items.reduce((s,it)=>s+(it.quantity||0),0);
-    if(countEl)countEl.textContent=`${items.length} פריטים`;
-    if(totalEl)totalEl.textContent=`סה״כ: ${total}`;
+    if(!whReorderMode){
+      const countEl=existing.querySelector('.wh-count');
+      const totalEl=existing.querySelector('.wh-total');
+      const items=wh.items?Object.values(wh.items):[];
+      const total=items.reduce((s,it)=>s+(it.quantity||0),0);
+      if(countEl)countEl.textContent=`${items.length} פריטים`;
+      if(totalEl)totalEl.textContent=`סה״כ: ${total}`;
+    }
     return;
   }
 
-  const card=el("div",{className:"list-card",style:{}});
-  card.onclick=()=>renderListDetail(whId);
+  const card=el("div",{className:"list-card"});
+  if(!whReorderMode)card.onclick=()=>renderListDetail(whId);
+
   const items=wh.items?Object.values(wh.items):[];
   const total=items.reduce((s,it)=>s+(it.quantity||0),0);
   const members=wh.members?Object.keys(wh.members):[];
@@ -435,26 +448,105 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
   meta.appendChild(el("span",{className:"wh-total",style:{fontSize:"13px",color:"var(--text-muted)"}},`סה״כ: ${total}`));
   info.appendChild(meta);
   const actions=el("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
-  const moreBtn=el("button",{className:"icon-btn",onClick:async e=>{
-    e.stopPropagation();
-    const isOwner=wh.owner===currentUser.username;
-    const choice=await showActionSheet([
-      {label:"שיתוף וניהול חברים",value:"share"},
-      {label:"שלח עותק למשתמש",value:"copy"},
-      {label:isOwner?"מחק מחסן":"עזוב מחסן",style:"danger",value:"delete"},
-    ]);
-    if(choice==="share")showShareModal(wrap,whId,wh);
-    else if(choice==="copy")showCopyWarehouseModal(wrap,whId,wh);
-    else if(choice==="delete")showDeleteModal(wrap,isOwner?`למחוק את "${wh.name}"?`:`לעזוב את "${wh.name}"?`,async()=>{
-      await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
-      await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
-      const r=await dbGet(`warehouses/${whId}/members`);
-      if(!r||Object.keys(r).length===0)await dbRemove(`warehouses/${whId}`);
+
+  if(whReorderMode){
+    const handle=el("div",{className:"drag-handle",style:{padding:"4px 6px",display:"flex",alignItems:"center"}});
+    handle.appendChild(icon("grip",22));
+    actions.appendChild(handle);
+
+    // HTML5 drag
+    cardWrapper.setAttribute("draggable","true");
+    cardWrapper.addEventListener("dragstart",e=>{
+      whDragSrcId=whId;cardWrapper.style.opacity="0.5";
+      e.dataTransfer.effectAllowed="move";
     });
-  }});
-  moreBtn.appendChild(icon("more",18));
-  const arrow=icon("forward",18);arrow.style.color="var(--text-muted)";
-  actions.append(moreBtn,arrow);card.append(info,actions);
+    cardWrapper.addEventListener("dragend",()=>{
+      cardWrapper.style.opacity="";
+      document.querySelectorAll('[data-wh-id]').forEach(c=>c.classList.remove("drag-over"));
+    });
+    cardWrapper.addEventListener("dragover",e=>{
+      e.preventDefault();e.dataTransfer.dropEffect="move";
+      if(whDragSrcId&&whDragSrcId!==whId){
+        document.querySelectorAll('[data-wh-id]').forEach(c=>c.classList.remove("drag-over"));
+        cardWrapper.classList.add("drag-over");
+      }
+    });
+    cardWrapper.addEventListener("dragleave",()=>cardWrapper.classList.remove("drag-over"));
+    cardWrapper.addEventListener("drop",async e=>{
+      e.preventDefault();cardWrapper.classList.remove("drag-over");
+      if(!whDragSrcId||whDragSrcId===whId)return;
+      const container=cardWrapper.parentElement;
+      const cards=[...container.querySelectorAll('[data-wh-id]')];
+      const fromIdx=cards.findIndex(c=>c.dataset.whId===whDragSrcId);
+      const toIdx=cards.findIndex(c=>c.dataset.whId===whId);
+      if(fromIdx===-1||toIdx===-1)return;
+      const newOrder=[...lastHomeWhIds];
+      const[moved]=newOrder.splice(fromIdx,1);newOrder.splice(toIdx,0,moved);
+      whDragSrcId=null;
+      const updates={};newOrder.forEach((id,i)=>{updates[`users/${currentUser.username}/warehouses/${id}`]=i+1});
+      await dbUpdate('/',updates);
+    });
+
+    // Touch drag
+    handle.addEventListener("touchstart",e=>{
+      e.preventDefault();
+      const touch=e.touches[0];const rect=cardWrapper.getBoundingClientRect();
+      whTouchDrag={whId,startY:touch.clientY,rectTop:rect.top,rectLeft:rect.left,rectWidth:rect.width,clone:null,targetId:null};
+      whTouchDrag.timer=setTimeout(()=>{
+        const clone=cardWrapper.cloneNode(true);
+        clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;`;
+        document.body.appendChild(clone);whTouchDrag.clone=clone;cardWrapper.style.opacity="0.3";
+      },80);
+    },{passive:false});
+    handle.addEventListener("touchmove",e=>{
+      if(!whTouchDrag)return;e.preventDefault();
+      const touch=e.touches[0];const dy=touch.clientY-whTouchDrag.startY;
+      if(whTouchDrag.clone)whTouchDrag.clone.style.top=(whTouchDrag.rectTop+dy)+"px";
+      const under=document.elementFromPoint(touch.clientX,touch.clientY);
+      const targetCard=under?.closest("[data-wh-id]");const tid=targetCard?.dataset.whId;
+      document.querySelectorAll('[data-wh-id]').forEach(c=>c.classList.remove("drag-over"));
+      if(tid&&tid!==whTouchDrag.whId){targetCard.classList.add("drag-over");whTouchDrag.targetId=tid;}
+      else whTouchDrag.targetId=null;
+    },{passive:false});
+    handle.addEventListener("touchend",async()=>{
+      if(!whTouchDrag)return;
+      clearTimeout(whTouchDrag.timer);if(whTouchDrag.clone)whTouchDrag.clone.remove();
+      cardWrapper.style.opacity="";
+      document.querySelectorAll('[data-wh-id]').forEach(c=>c.classList.remove("drag-over"));
+      const tid=whTouchDrag.targetId;const srcId=whTouchDrag.whId;whTouchDrag=null;
+      if(tid&&srcId!==tid){
+        const newOrder=[...lastHomeWhIds];
+        const fromIdx=newOrder.indexOf(srcId);const toIdx=newOrder.indexOf(tid);
+        if(fromIdx!==-1&&toIdx!==-1){newOrder.splice(fromIdx,1);newOrder.splice(toIdx,0,srcId);}
+        const updates={};newOrder.forEach((id,i)=>{updates[`users/${currentUser.username}/warehouses/${id}`]=i+1});
+        await dbUpdate('/',updates);
+      }
+    });
+  }else{
+    const moreBtn=el("button",{className:"icon-btn",onClick:async e=>{
+      e.stopPropagation();
+      const isOwner=wh.owner===currentUser.username;
+      const choice=await showActionSheet([
+        {label:"שיתוף וניהול חברים",value:"share"},
+        {label:"שלח עותק למשתמש",value:"copy"},
+        {label:isOwner?"מחק מחסן":"עזוב מחסן",style:"danger",value:"delete"},
+      ]);
+      if(choice==="share")showShareModal(wrap,whId,wh);
+      else if(choice==="copy")showCopyWarehouseModal(wrap,whId,wh);
+      else if(choice==="delete")showDeleteModal(wrap,isOwner?`למחוק את "${wh.name}"?`:`לעזוב את "${wh.name}"?`,async()=>{
+        await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+        await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+        const r=await dbGet(`warehouses/${whId}/members`);
+        if(!r||Object.keys(r).length===0)await dbRemove(`warehouses/${whId}`);
+      });
+    }});
+    moreBtn.appendChild(icon("more",18));
+    const arrow=icon("forward",18);arrow.style.color="var(--text-muted)";
+    actions.append(moreBtn,arrow);
+  }
+
+  card.append(info,actions);
+  cardWrapper.dataset.whId=whId;
   cardWrapper.appendChild(card);
 }
 
@@ -466,6 +558,10 @@ let currentItems=[];
 let currentWhId=null;
 let dragSrcId=null;
 let touchDrag=null;
+let whReorderMode=false;
+let whDragSrcId=null;
+let whTouchDrag=null;
+let lastHomeWhIds=[];
 let userWarehouseRole='member';
 let currentWhData=null;
 
