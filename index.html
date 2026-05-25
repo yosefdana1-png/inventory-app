@@ -945,8 +945,9 @@ function showNewItemModal(parent,whId){
     m.appendChild(el("h3",{style:{marginBottom:"16px"}},"פריט חדש"));
     const ni=el("input",{className:"app-input",placeholder:"שם הפריט (למשל: חולצה)",style:{marginBottom:"12px"}});
     const qi=el("input",{className:"app-input",placeholder:"כמות התחלתית (ברירת מחדל: 0)",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
+    const skuInput=el("input",{className:"app-input",placeholder:'מק"ט (אופציונלי)',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off",style:{marginBottom:"12px"}});
     const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
-    m.append(ni,qi,noteInput);
+    m.append(ni,qi,skuInput,noteInput);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const ab=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
@@ -957,11 +958,13 @@ function showNewItemModal(parent,whId){
       if(existingItems)Object.values(existingItems).forEach(it=>{if((it.order||0)>maxOrder)maxOrder=it.order||0});
       const itemData={name:ni.value.trim(),quantity:qty,order:maxOrder+1,
         history:{[genId()]:{action:"נוצר",amount:qty,by:currentUser.displayName,date:new Date().toISOString()}}};
+      if(skuInput.value.trim())itemData.sku=skuInput.value.trim();
       if(noteInput.value.trim())itemData.note=noteInput.value.trim();
       await dbSet(`warehouses/${whId}/items/${genId()}`,itemData);close();
     }},"הוסף פריט");btns.appendChild(ab);m.appendChild(btns);
     ni.addEventListener("keydown",e=>{if(e.key==="Enter")qi.focus()});
-    qi.addEventListener("keydown",e=>{if(e.key==="Enter")ab.click()});
+    qi.addEventListener("keydown",e=>{if(e.key==="Enter")skuInput.focus()});
+    skuInput.addEventListener("keydown",e=>{if(e.key==="Enter")ab.click()});
     setTimeout(()=>ni.focus(),100);
   });
 }
@@ -1146,7 +1149,21 @@ function showWarehouseSettingsModal(parent,whId,wh){
   const isAdmin=userWarehouseRole==='owner'||userWarehouseRole==='admin';
   showModal(parent,(m,close)=>{
     m.style.maxHeight='none';m.style.overflow='visible';
-    m.appendChild(el("h3",{style:{marginBottom:"16px"}},"הגדרות מחסן"));
+    m.appendChild(el("h3",{style:{marginBottom:"12px"}},"הגדרות מחסן"));
+    if(userWarehouseRole==='owner'){
+      const nameRow=el("div",{style:{display:"flex",gap:"8px",alignItems:"center",marginBottom:"14px"}});
+      const nameInp=el("input",{className:"app-input",style:{flex:"1"},value:wh.name});
+      nameInp.value=wh.name;
+      const saveNameBtn=el("button",{className:"btn btn-primary btn-sm",onClick:async()=>{
+        const v=nameInp.value.trim();if(!v||v===wh.name)return;
+        await dbSet(`warehouses/${whId}/name`,v);
+        wh.name=v;saveNameBtn.textContent="נשמר";
+        setTimeout(()=>{saveNameBtn.textContent="שמור"},1200);
+      }},"שמור");
+      nameInp.addEventListener("keydown",e=>{if(e.key==="Enter")saveNameBtn.click()});
+      nameRow.append(nameInp,saveNameBtn);
+      m.appendChild(nameRow);
+    }
     const tabs=isAdmin?['חברים','הרשאות','סידור','תצוגה']:['חברים'];
     const tabBar=el("div",{className:"tab-bar"});
     const panelWrap=el("div",{style:{height:"320px",overflowY:"auto",direction:"ltr"}});
