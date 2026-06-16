@@ -324,21 +324,33 @@ function renderAuth(){
 let cachedHomeContent=null;
 let homeUnsubs=[];
 
+// Personal warehouse order is stored as a number per id in users/<uid>/warehouses.
+// Legacy entries stored as `true` sort first (treated as 0).
+function sortedWhIds(data){
+  const entries=data?Object.entries(data):[];
+  entries.sort((a,b)=>(typeof a[1]==='number'?a[1]:0)-(typeof b[1]==='number'?b[1]:0));
+  return entries.map(([id])=>id);
+}
+
+// Single source of truth for attaching the home warehouse-list listener.
+// Used by renderHome (both paths) and the swipe-back handler so they stay consistent.
+function attachHomeWarehouseListener(content,screen){
+  homeUnsubs.forEach(f=>f());homeUnsubs=[];
+  const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
+    lastHomeWhIds=sortedWhIds(data);
+    renderWarehouseList(content,lastHomeWhIds,screen);
+  });
+  homeUnsubs.push(u);unsubscribers.push(u);
+  return u;
+}
+
 function renderHome(){
   cleanup();
   
   if(homeScreen&&cachedHomeContent){
     currentWhId=null;
     navShowHome(true);
-    // Reattach warehouse list listener only
-    homeUnsubs.forEach(f=>f());homeUnsubs=[];
-    const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
-      const entries=data?Object.entries(data):[];
-      entries.sort((a,b)=>(typeof a[1]==='number'?a[1]:0)-(typeof b[1]==='number'?b[1]:0));
-      lastHomeWhIds=entries.map(([id])=>id);
-      renderWarehouseList(cachedHomeContent,lastHomeWhIds,homeScreen);
-    });
-    homeUnsubs.push(u);
+    attachHomeWarehouseListener(cachedHomeContent,homeScreen);
     return;
   }
   const wrap=el("div",{className:"screen",style:{paddingBottom:"100px"}});
@@ -369,13 +381,7 @@ function renderHome(){
   currentWhId=null;
   navInit();
   navShowHome(false);
-  const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
-    const entries=data?Object.entries(data):[];
-    entries.sort((a,b)=>(typeof a[1]==='number'?a[1]:0)-(typeof b[1]==='number'?b[1]:0));
-    lastHomeWhIds=entries.map(([id])=>id);
-    renderWarehouseList(content,lastHomeWhIds,wrap);
-  });
-  homeUnsubs.push(u);unsubscribers.push(u);
+  attachHomeWarehouseListener(content,wrap);
 }
 
 let currentWhIds=[];
@@ -1641,7 +1647,14 @@ function showSettingsModal(parent){
     sc.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500",marginBottom:"4px"}},"שיתוף מחסנים"));
     sc.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-sec)"}},"מחסנים משותפים מסונכרנים בזמן אמת בין כל החברים."));
     m.appendChild(sc);
-    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"8px",color:"var(--danger)",borderColor:"rgba(255,92,92,.3)"},onClick:()=>{currentUser=null;homeScreen=null;cachedHomeContent=null;homeUnsubs=[];localStorage.removeItem("inv_user");close();renderAuth()}},"התנתק"));
+    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"8px",color:"var(--danger)",borderColor:"rgba(255,92,92,.3)"},onClick:()=>{
+      cleanup();
+      homeUnsubs.forEach(f=>f());homeUnsubs=[];
+      whCardListeners.forEach(f=>f());whCardListeners=[];
+      currentUser=null;homeScreen=null;cachedHomeContent=null;
+      currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;
+      localStorage.removeItem("inv_user");close();renderAuth();
+    }},"התנתק"));
     m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"12px"},onClick:close},"סגור"));
   });
 }
@@ -1689,12 +1702,7 @@ function endSwipe(completed){
       cleanup();
       currentWhId=null;isShowingDetail=false;
       const app=$("#app");app.innerHTML="";app.appendChild(homeScreen);
-      homeUnsubs.forEach(f=>f());homeUnsubs=[];
-      const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
-        const whIds=data?Object.keys(data):[];
-        renderWarehouseList(cachedHomeContent,whIds,homeScreen);
-      });
-      homeUnsubs.push(u);
+      attachHomeWarehouseListener(cachedHomeContent,homeScreen);
     },310);
   }else{
     if(screen){
