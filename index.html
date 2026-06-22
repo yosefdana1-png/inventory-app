@@ -1620,7 +1620,12 @@ function showExportModal(parent,whId,items){
 
     let sorted=[...items].sort((a,b)=>a[1].name.localeCompare(b[1].name,"he"));
     sorted=sorted.filter(([,item])=>(item.quantity||0)>0);
-    const text=sorted.map(([,item])=>`${item.name} (${item.quantity||0})`).join("\n");
+    const hasSku=sorted.some(([,item])=>item.sku);
+    const text=sorted.map(([,item])=>{
+      let line=`${item.name} (${item.quantity||0})`;
+      if(hasSku&&item.sku)line+=` | מק״ט: ${item.sku}`;
+      return line;
+    }).join("\n");
 
     const ta=el("textarea",{className:"app-input",rows:"8",style:{direction:"rtl",lineHeight:"1.8",fontSize:"15px"},readonly:"true"});
     ta.value=text;
