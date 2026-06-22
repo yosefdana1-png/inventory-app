@@ -392,10 +392,25 @@ let whCardListeners=[];
 
 function renderWarehouseList(c,whIds,wrap){
   const same=currentWhIds.length===whIds.length&&currentWhIds.every((id,i)=>id===whIds[i]);
+  const cardsExist=c.querySelector('#warehouseCards');
 
-  if(same&&c.querySelector('#warehouseCards')&&whCardListeners.length>0)return;
+  if(same&&cardsExist&&whCardListeners.length>0)return;
 
-  // Cleanup old warehouse card listeners only
+  if(same&&cardsExist&&whCardListeners.length===0&&FB){
+    whIds.forEach(whId=>{
+      const cw=document.getElementById(`wh-${whId}`);
+      if(!cw)return;
+      const unsub=FB.onValue(dbRef(`warehouses/${whId}`),snap=>{
+        const wh=snap.exists()?snap.val():null;
+        cacheSet(`warehouses/${whId}`,wh);
+        if(!wh){cw.innerHTML="";return}
+        buildWarehouseCard(cw,whId,wh,wrap);
+      });
+      whCardListeners.push(unsub);
+    });
+    return;
+  }
+
   whCardListeners.forEach(f=>f());
   whCardListeners=[];
   currentWhIds=[...whIds];
