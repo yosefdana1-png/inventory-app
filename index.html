@@ -170,9 +170,24 @@ async function dbRemove(p){await FB.remove(dbRef(p))}
 async function dbUpdate(p,v){await FB.update(dbRef(p),v)}
 function dbListen(p,cb){const u=FB.onValue(dbRef(p),s=>cb(s.exists()?s.val():null));unsubscribers.push(u);return u}
 
-// Local cache for instant loading
-function cacheSet(key,data){try{sessionStorage.setItem('inv_'+key,JSON.stringify(data))}catch(e){}}
-function cacheGet(key){try{const d=sessionStorage.getItem('inv_'+key);return d?JSON.parse(d):null}catch(e){return null}}
+// Local cache for instant loading. Stored in localStorage so it survives
+// app restarts (sessionStorage is wiped every launch on iOS standalone).
+// On quota overflow, retry with item images stripped so text data still caches.
+function cacheSet(key,data){
+  const k='inv_'+key;
+  try{localStorage.setItem(k,JSON.stringify(data))}
+  catch(e){
+    try{
+      if(data&&data.items){
+        const slim={...data,items:{}};
+        for(const[id,it]of Object.entries(data.items)){const{image,...rest}=it;slim.items[id]=rest}
+        localStorage.setItem(k,JSON.stringify(slim));
+      }else localStorage.removeItem(k);
+    }catch(e2){try{localStorage.removeItem(k)}catch(e3){}}
+  }
+}
+function cacheGet(key){try{const d=localStorage.getItem('inv_'+key);return d?JSON.parse(d):null}catch(e){return null}}
+function cacheClearAll(){try{Object.keys(localStorage).filter(k=>k.startsWith('inv_')&&k!=='inv_user').forEach(k=>localStorage.removeItem(k))}catch(e){}}
 
 function dbListenCached(p,cb){
   const cached=cacheGet(p);
@@ -1677,7 +1692,7 @@ function showSettingsModal(parent){
       whCardListeners.forEach(f=>f());whCardListeners=[];
       currentUser=null;homeScreen=null;cachedHomeContent=null;
       currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;
-      localStorage.removeItem("inv_user");close();renderAuth();
+      cacheClearAll();localStorage.removeItem("inv_user");close();renderAuth();
     }},"התנתק"));
     m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"12px"},onClick:close},"סגור"));
   });
