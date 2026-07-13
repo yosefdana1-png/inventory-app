@@ -568,11 +568,16 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
       e.stopPropagation();
       const isOwner=wh.owner===currentUser.username;
       const choice=await showActionSheet([
+        {label:"יצוא רשימה",value:"export"},
         {label:"שיתוף וניהול חברים",value:"share"},
         {label:"שלח עותק למשתמש",value:"copy"},
         {label:isOwner?"מחק מחסן":"עזוב מחסן",style:"danger",value:"delete"},
       ]);
-      if(choice==="share")showShareModal(wrap,whId,wh);
+      if(choice==="export"){
+        const items=await dbGet(`warehouses/${whId}/items`);
+        showExportModal(wrap,whId,Object.entries(items||{}));
+      }
+      else if(choice==="share")showShareModal(wrap,whId,wh);
       else if(choice==="copy")showCopyWarehouseModal(wrap,whId,wh);
       else if(choice==="delete")showDeleteModal(wrap,isOwner?`למחוק את "${wh.name}"?`:`לעזוב את "${wh.name}"?`,async()=>{
         await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
