@@ -952,7 +952,7 @@ function renderItemsList(c,whId,items,wrap){
         // Main menu loop — sub-menu cancel returns here; inline actions keep it open
         while(true){
           const mainOpts=[];
-          if(canEdit)mainOpts.push({label:"עריכה >",value:"edit-sub"});
+          if(canEdit)mainOpts.push({label:"עריכה",value:"edit"});
           mainOpts.push({label:"תמונה >",value:"image-sub"});
           mainOpts.push({label:"היסטוריה",value:"history"});
           if(memberCan('reset')&&(item.quantity||0)>0)mainOpts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
@@ -960,13 +960,8 @@ function renderItemsList(c,whId,items,wrap){
           const choice=await showActionSheet(mainOpts,item.name);
           if(!choice)return; // closed
 
-          if(choice==="edit-sub"){
-            const editOpts=[{label:"שם",value:"name"},{label:"הערה",value:"note"},{label:'מק"ט',value:"sku"}];
-            const ec=await showActionSheet(editOpts,"עריכה");
-            if(ec==="name"){showEditItemModal(wrap,whId,itemId,item);return;}
-            else if(ec==="note"){showNoteModal(wrap,whId,itemId,item);return;}
-            else if(ec==="sku"){showSkuModal(wrap,whId,itemId,item);return;}
-            // cancelled — loop back to main
+          if(choice==="edit"){
+            showEditItemModal(wrap,whId,itemId,item);return;
           }else if(choice==="image-sub"){
             // Image sub-menu loop — delete stays in sub-menu
             while(true){
@@ -1140,74 +1135,43 @@ function showAdjustModal(parent,whId,itemId,item,mode){
   });
 }
 
+// Unified item edit modal — all fields in one window, same layout as new-item.
+// Empty SKU/note save as null, which removes them from Firebase.
 function showEditItemModal(parent,whId,itemId,item){
   showModal(parent,(m,close)=>{
-    m.appendChild(el("h3",{style:{marginBottom:"16px"}},"עריכת פריט"));
-    const nameInput=el("input",{className:"app-input",placeholder:"שם הפריט"});
-    nameInput.value=item.name;
-    m.appendChild(nameInput);
-    const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
-    btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
-    const saveBtn=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
-      if(!nameInput.value.trim())return;
-      saveBtn.disabled=true;
-      await dbSet(`warehouses/${whId}/items/${itemId}/name`,nameInput.value.trim());
-      close();
-    }},"שמור");
-    btns.appendChild(saveBtn);m.appendChild(btns);
-    nameInput.addEventListener("keydown",e=>{if(e.key==="Enter")saveBtn.click()});
-    setTimeout(()=>{nameInput.focus();nameInput.select()},100);
-  });
-}
-
-function showNoteModal(parent,whId,itemId,item){
-  showModal(parent,(m,close)=>{
-    m.appendChild(el("h3",{style:{marginBottom:"4px"}},"הערה"));
+    m.appendChild(el("h3",{style:{marginBottom:"4px"}},"עריכת פריט"));
     m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"16px"}},item.name));
-    const ta=el("textarea",{className:"app-input",placeholder:"כתוב הערה...",rows:"3",value:item.note||""});
-    // Set value after creation for textarea
-    ta.value=item.note||"";
-    m.appendChild(ta);
+    const ni=el("input",{className:"app-input",placeholder:"שם הפריט",style:{marginBottom:"12px"}});
+    ni.value=item.name;
+    const qi=el("input",{className:"app-input",placeholder:"כמות",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
+    qi.value=item.quantity||0;
+    const skuInput=el("input",{className:"app-input",placeholder:'מק"ט (אופציונלי)',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off",style:{marginBottom:"12px"}});
+    skuInput.value=item.sku||"";
+    const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
+    noteInput.value=item.note||"";
+    m.append(ni,qi,skuInput,noteInput);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
-    if(item.note){
-      btns.appendChild(el("button",{className:"btn btn-danger btn-sm",style:{},onClick:async()=>{
-        await dbRemove(`warehouses/${whId}/items/${itemId}/note`);close();
-      }},"מחק הערה"));
-    }
     const sb=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
-      sb.disabled=true;
-      if(ta.value.trim())await dbSet(`warehouses/${whId}/items/${itemId}/note`,ta.value.trim());
-      else await dbRemove(`warehouses/${whId}/items/${itemId}/note`);
-      close();
-    }},"שמור");btns.appendChild(sb);m.appendChild(btns);
-    setTimeout(()=>ta.focus(),100);
-  });
-}
-
-function showSkuModal(parent,whId,itemId,item){
-  showModal(parent,(m,close)=>{
-    m.appendChild(el("h3",{style:{marginBottom:"4px"}},'מק"ט'));
-    m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"16px"}},item.name));
-    const inp=el("input",{className:"app-input",placeholder:'מספר מק"ט',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off"});
-    inp.value=item.sku||"";
-    m.appendChild(inp);
-    const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
-    btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
-    if(item.sku){
-      btns.appendChild(el("button",{className:"btn btn-danger btn-sm",onClick:async()=>{
-        await dbRemove(`warehouses/${whId}/items/${itemId}/sku`);close();
-      }},'מחק מק"ט'));
-    }
-    const sb=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
-      sb.disabled=true;
-      if(inp.value.trim())await dbSet(`warehouses/${whId}/items/${itemId}/sku`,inp.value.trim());
-      else await dbRemove(`warehouses/${whId}/items/${itemId}/sku`);
+      const name=ni.value.trim();if(!name)return;sb.disabled=true;
+      const upd={
+        [`items/${itemId}/name`]:name,
+        [`items/${itemId}/sku`]:skuInput.value.trim()||null,
+        [`items/${itemId}/note`]:noteInput.value.trim()||null,
+      };
+      const nq=parseInt(qi.value);
+      if(!isNaN(nq)&&nq>=0&&nq!==(item.quantity||0)){
+        upd[`items/${itemId}/quantity`]=nq;
+        upd[`items/${itemId}/history/${genId()}`]={action:"עריכה",amount:Math.abs(nq-(item.quantity||0)),result:nq,by:currentUser.displayName,date:new Date().toISOString()};
+      }
+      await dbUpdate(`warehouses/${whId}`,upd);
       close();
     }},"שמור");
     btns.appendChild(sb);m.appendChild(btns);
-    inp.addEventListener("keydown",e=>{if(e.key==="Enter")sb.click()});
-    setTimeout(()=>{inp.focus();inp.select()},100);
+    ni.addEventListener("keydown",e=>{if(e.key==="Enter")qi.focus()});
+    qi.addEventListener("keydown",e=>{if(e.key==="Enter")skuInput.focus()});
+    skuInput.addEventListener("keydown",e=>{if(e.key==="Enter")sb.click()});
+    setTimeout(()=>{ni.focus();ni.select()},100);
   });
 }
 
