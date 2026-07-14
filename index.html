@@ -950,11 +950,14 @@ function renderItemsList(c,whId,items,wrap){
       const sb=el("button",{className:"qty-btn qty-btn-sub",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"remove")});sb.appendChild(icon("minus",18));
       const ab=el("button",{className:"qty-btn qty-btn-add",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"add")});ab.appendChild(icon("plus",18));
       const mb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:async()=>{
-        // Main menu loop — sub-menu cancel returns here; inline actions keep it open
+        // Main menu loop — inline actions keep it open.
+        // Cards update in place without rebuilding, so the closure's `item` can be
+        // stale (e.g. built from image-stripped cache) — refresh from currentItems.
         while(true){
+          const fresh=currentItems.find(([id])=>id===itemId);
+          if(fresh)item=fresh[1];
           const mainOpts=[];
           if(canEdit)mainOpts.push({label:"עריכה",value:"edit"});
-          mainOpts.push({label:"תמונה >",value:"image-sub"});
           mainOpts.push({label:"היסטוריה",value:"history"});
           if(memberCan('reset')&&(item.quantity||0)>0)mainOpts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
           if(canEdit)mainOpts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
@@ -963,23 +966,6 @@ function renderItemsList(c,whId,items,wrap){
 
           if(choice==="edit"){
             showEditItemModal(wrap,whId,itemId,item);return;
-          }else if(choice==="image-sub"){
-            // Image sub-menu loop — delete stays in sub-menu
-            while(true){
-              const imgOpts=[];
-              if(item.image)imgOpts.push({label:"הצג תמונה",value:"view"});
-              imgOpts.push({label:item.image?"החלף תמונה":"הוסף תמונה",value:"upload"});
-              if(item.image)imgOpts.push({label:"מחק תמונה",style:"danger",value:"del-img"});
-              const ic=await showActionSheet(imgOpts,"תמונה");
-              if(!ic)break; // back to main loop
-              if(ic==="view"){showImageViewer(item.image);return;}
-              if(ic==="upload"){showImageModal(wrap,whId,itemId,item);return;}
-              if(ic==="del-img"){
-                await dbRemove(`warehouses/${whId}/items/${itemId}/image`);
-                delete item.image;
-                // continue inner loop — sub-menu reopens (now only "הוסף תמונה")
-              }
-            }
           }else if(choice==="history"){
             showHistoryModal(wrap,item);return;
           }else if(choice==="reset"){
@@ -1209,37 +1195,6 @@ function showEditItemModal(parent,whId,itemId,item){
     qi.addEventListener("keydown",e=>{if(e.key==="Enter")skuInput.focus()});
     skuInput.addEventListener("keydown",e=>{if(e.key==="Enter")sb.click()});
     setTimeout(()=>{ni.focus();ni.select()},100);
-  });
-}
-
-function showImageModal(parent,whId,itemId,item){
-  showModal(parent,(m,close)=>{
-    m.appendChild(el("h3",{style:{marginBottom:"4px"}},"תמונה"));
-    m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"14px"}},item.name));
-    if(item.image){
-      const prev=el("img",{src:item.image,style:{width:"100%",borderRadius:"12px",marginBottom:"14px",objectFit:"cover",maxHeight:"220px",cursor:"pointer"},onClick:()=>showImageViewer(item.image)});
-      m.appendChild(prev);
-    }
-    const fileInput=el("input",{type:"file",accept:"image/*",style:{display:"none"}});
-    fileInput.addEventListener("change",async e=>{
-      const file=e.target.files[0];if(!file)return;
-      const uploadBtn=m.querySelector('.img-upload-btn');if(uploadBtn){uploadBtn.disabled=true;uploadBtn.textContent="מעלה...";}
-      resizeAndEncodeImage(file,800,0.72,async data=>{
-        await dbSet(`warehouses/${whId}/items/${itemId}/image`,data);
-        close();
-      });
-    });
-    m.appendChild(fileInput);
-    const btns=el("div",{style:{display:"flex",gap:"8px",flexWrap:"wrap"}});
-    btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
-    const uploadBtn=el("button",{className:"btn btn-primary img-upload-btn",style:{flex:"1"},onClick:()=>fileInput.click()},item.image?"החלף תמונה":"בחר תמונה");
-    btns.appendChild(uploadBtn);
-    if(item.image){
-      btns.appendChild(el("button",{className:"btn btn-danger btn-sm",onClick:async()=>{
-        await dbRemove(`warehouses/${whId}/items/${itemId}/image`);close();
-      }},"מחק"));
-    }
-    m.appendChild(btns);
   });
 }
 
