@@ -1137,7 +1137,9 @@ function showEditItemModal(parent,whId,itemId,item){
     const imgBtns=el("div",{style:{display:"flex",gap:"8px",alignItems:"center"}});
     const fileInput=el("input",{type:"file",accept:"image/*",style:{display:"none"}});
     const pickBtn=el("button",{className:"btn btn-ghost btn-sm",style:{fontSize:"13px",padding:"7px 14px"},onClick:()=>fileInput.click()});
-    const delImgBtn=el("button",{className:"btn btn-ghost btn-sm",style:{fontSize:"13px",padding:"7px 14px",color:"var(--danger)",borderColor:"rgba(255,92,92,.3)"},onClick:()=>{
+    const delImgBtn=el("button",{className:"btn btn-ghost btn-sm",style:{fontSize:"13px",padding:"7px 14px",color:"var(--danger)",borderColor:"rgba(255,92,92,.3)"},onClick:async()=>{
+      const c=await showActionSheet([{label:"הסר תמונה",style:"danger",value:"confirm"}],"להסיר את התמונה? היא תימחק בשמירה");
+      if(c!=="confirm")return;
       pendingImage=null;imageChanged=true;refreshImgUI();
     }},"הסר");
     function refreshImgUI(){
