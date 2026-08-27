@@ -793,8 +793,14 @@ function renderItemsList(c,whId,items,wrap){
   const existingIds=[...existingCards].map(c=>c.dataset.itemId);
   const newIds=filtered.map(([id])=>id);
   const sameStructure=existingIds.length===newIds.length&&existingIds.every((id,i)=>id===newIds[i]);
+  // If the currently-rendered DOM is still showing reorder-mode chrome (drag
+  // handles / the save bar) but reorderMode just turned off (or vice versa),
+  // force a full rebuild even if the item ids match — otherwise the smart
+  // in-place update below skips touching that chrome and the "שמור" button
+  // (and drag handles) look like they did nothing.
+  const listWasInReorderMode=!!listContainer.querySelector('.drag-handle');
 
-  if(sameStructure&&existingIds.length>0&&!reorderMode){
+  if(sameStructure&&existingIds.length>0&&!reorderMode&&!listWasInReorderMode){
     // Smart update - only update quantities, names, notes
     filtered.forEach(([itemId,item])=>{
       const card=listContainer.querySelector(`[data-item-id="${itemId}"]`);
