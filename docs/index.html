@@ -310,7 +310,7 @@ function renderAuth(){
   const rt=el("button",{className:"tab-btn",onClick:()=>{mode="register";rt.className="tab-btn active";lt.className="tab-btn";nr.style.display="block";err.textContent="";ab.textContent="צור חשבון";}},"הרשמה");
   tabs.append(lt,rt);box.appendChild(tabs);
   const nr=el("div",{style:{display:"none",marginBottom:"12px"}});
-  const ni=el("input",{className:"app-input",placeholder:"שם תצוגה (למשל: יוסף)"});nr.appendChild(ni);
+  const ni=el("input",{className:"app-input",placeholder:"שם תצוגה"});nr.appendChild(ni);
   const ui=el("input",{className:"app-input",placeholder:"שם משתמש",style:{marginBottom:"12px"},autocapitalize:"off",autocorrect:"off"});
   const pi=el("input",{type:"password",className:"app-input",placeholder:"סיסמה"});
   const err=el("p",{style:{color:"var(--danger)",fontSize:"13px",marginTop:"10px",minHeight:"20px"}});
