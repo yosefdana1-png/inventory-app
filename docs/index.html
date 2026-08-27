@@ -663,8 +663,10 @@ function renderListDetail(whId){
     const items=data.items?Object.entries(data.items):[];
     countEl.textContent=`${items.length} פריטים`;
     migrateLegacyItemImages(whId,items);
-    // Apply default sort from warehouse settings
-    if(data.sortMode&&data.sortMode!=='manual')currentSort=data.sortMode;
+    // Apply default sort from warehouse settings — but never override an active
+    // manual-reorder session, or every drag-drop write (which re-triggers this
+    // listener) would snap items back to the warehouse's default sort.
+    if(data.sortMode&&data.sortMode!=='manual'&&!reorderMode)currentSort=data.sortMode;
     renderItemsView(content,whId,items,wrap);
   });
 }
