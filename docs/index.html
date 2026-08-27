@@ -3,7 +3,7 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0c0f14">
@@ -68,7 +68,7 @@
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;animation:fadeIn .15s ease}
     .modal{background:var(--surface);border-radius:20px;padding:28px;width:100%;max-width:400px;border:1px solid var(--border);animation:scaleIn .2s ease;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
     .modal h3{font-size:18px;font-weight:600;margin-bottom:4px}
-    .header{position:sticky;top:0;z-index:100;background:rgba(12,15,20,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .header{position:sticky;top:0;z-index:100;background:rgba(12,15,20,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:max(16px,env(safe-area-inset-top)) 20px 16px;display:flex;align-items:center;justify-content:space-between}
     .list-card{background:var(--card);border-radius:16px;padding:18px 20px;border:1px solid var(--border);cursor:pointer;transition:background .2s;display:flex;align-items:center;justify-content:space-between}
     .list-card:active,.list-card:hover{background:var(--card-hover)}
     .item-card{background:var(--card);border-radius:16px;padding:14px 12px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;transition:all .2s;gap:4px;overflow:hidden}
