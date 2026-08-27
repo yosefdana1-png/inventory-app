@@ -556,20 +556,25 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
       if(tid&&tid!==whTouchDrag.whId){targetCard.classList.add("drag-over");whTouchDrag.targetId=tid;}
       else whTouchDrag.targetId=null;
     },{passive:false});
-    handle.addEventListener("touchend",async()=>{
+    // touchcancel too — Android can cancel a touch sequence without firing
+    // touchend, which would otherwise leave the floating clone stuck on screen
+    // forever (it's appended to document.body, outside the normal re-render).
+    const finishWhTouchDrag=async(commit)=>{
       if(!whTouchDrag)return;
       clearTimeout(whTouchDrag.timer);if(whTouchDrag.clone)whTouchDrag.clone.remove();
       cardWrapper.style.opacity="";
       document.querySelectorAll('[data-wh-id]').forEach(c=>c.classList.remove("drag-over"));
       const tid=whTouchDrag.targetId;const srcId=whTouchDrag.whId;whTouchDrag=null;
-      if(tid&&srcId!==tid){
+      if(commit&&tid&&srcId!==tid){
         const newOrder=[...lastHomeWhIds];
         const fromIdx=newOrder.indexOf(srcId);const toIdx=newOrder.indexOf(tid);
         if(fromIdx!==-1&&toIdx!==-1){newOrder.splice(fromIdx,1);newOrder.splice(toIdx,0,srcId);}
         const upd={};newOrder.forEach((id,i)=>{upd[id]=i+1});
         await dbUpdate(`users/${currentUser.username}/warehouses`,upd);
       }
-    });
+    };
+    handle.addEventListener("touchend",()=>finishWhTouchDrag(true));
+    handle.addEventListener("touchcancel",()=>finishWhTouchDrag(false));
   }else{
     const moreBtn=el("button",{className:"icon-btn",onClick:async e=>{
       e.stopPropagation();
@@ -803,10 +808,16 @@ function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
     if(dy){
       elm.style.transition="none";
       elm.style.transform=`translateY(${dy}px)`;
-      requestAnimationFrame(()=>{
-        elm.style.transition="transform .22s cubic-bezier(.2,.8,.2,1)";
-        elm.style.transform="";
-      });
+      // Force a layout flush so the browser commits the "jump back to old spot"
+      // state above before we flip the transition back on — a nested
+      // requestAnimationFrame here (the previous approach) can interleave with a
+      // *second* reorder landing before the first one's frame fires, leaving a
+      // card's transform permanently stuck mid-animation (the frozen/duplicated
+      // card seen on Android). Reading offsetHeight is synchronous, so there's no
+      // window for another call to race it.
+      void elm.offsetHeight;
+      elm.style.transition="transform .22s cubic-bezier(.2,.8,.2,1)";
+      elm.style.transform="";
     }
   });
   return newArr;
@@ -999,7 +1010,13 @@ function renderItemsList(c,whId,items,wrap){
           }
         });
       },{passive:false});
-      handle.addEventListener("touchend",async()=>{
+      // touchend AND touchcancel both need to clean up — Android in particular can
+      // cancel an in-progress touch (e.g. if it decides the gesture is a scroll or
+      // a system edge-swipe) without ever firing touchend, which — if only
+      // touchend was handled — left the floating clone stuck on screen forever
+      // (it's appended to document.body, outside any list re-render) and
+      // touchDrag stuck non-null, blocking every future drag.
+      const finishTouchDrag=async(commit)=>{
         if(!touchDrag)return;
         if(touchDrag.rafId)cancelAnimationFrame(touchDrag.rafId);
         if(touchDrag.clone)touchDrag.clone.remove();
@@ -1008,12 +1025,18 @@ function renderItemsList(c,whId,items,wrap){
         const finalEls=touchDrag.cardEls;
         const changed=touchDrag.dragIndex!==touchDrag.curIndex;
         touchDrag=null;
-        if(changed){
+        if(commit&&changed){
           const updates={};
           finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
           await dbUpdate(`warehouses/${whId}`,updates);
+        }else if(!commit){
+          // Cancelled mid-gesture — snap the DOM order back to what it was before
+          // this drag started so nothing looks reordered without being saved.
+          renderItemsList(c,whId,items,wrap);
         }
-      });
+      };
+      handle.addEventListener("touchend",()=>finishTouchDrag(true));
+      handle.addEventListener("touchcancel",()=>finishTouchDrag(false));
     }
 
     const info=el("div",{className:"item-info",style:{flex:"1",minWidth:"0"}});
