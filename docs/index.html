@@ -929,18 +929,18 @@ function renderItemsList(c,whId,items,wrap){
         const touch=e.touches[0];
         const rect=card.getBoundingClientRect();
         touchDrag={itemId,startY:touch.clientY,rectTop:rect.top,rectLeft:rect.left,rectWidth:rect.width,clone:null,targetId:null,lastTargetId:null,rafId:null,pendingDy:0};
-        touchDrag.timer=setTimeout(()=>{
-          if(!touchDrag)return;
-          const clone=card.cloneNode(true);
-          // Seed the transform with whatever offset already accumulated during the
-          // 80ms hold delay — otherwise the clone snaps to 0 first, then jumps to
-          // catch up on the next frame, which read as a stutter/flicker on grab.
-          clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;will-change:transform;transition:none;transform:translateY(${touchDrag.pendingDy}px);`;
-          document.body.appendChild(clone);
-          touchDrag.clone=clone;
-          card.style.transition="none";
-          card.style.opacity="0.3";
-        },80);
+        // The drag handle is a dedicated grip icon (not the whole row), so there's
+        // no need to wait-and-see whether this is a scroll vs a drag — start
+        // tracking the finger immediately. The earlier 80ms hold delay before
+        // creating the floating clone was exactly the "feels delayed" lag, and
+        // it also made the clone jump on creation to catch up to any movement
+        // that happened during that wait.
+        const clone=card.cloneNode(true);
+        clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;will-change:transform;transition:none;transform:translateY(0);`;
+        document.body.appendChild(clone);
+        touchDrag.clone=clone;
+        card.style.transition="none";
+        card.style.opacity="0.3";
       },{passive:false});
       handle.addEventListener("touchmove",e=>{
         if(!touchDrag)return;e.preventDefault();
@@ -965,7 +965,6 @@ function renderItemsList(c,whId,items,wrap){
       },{passive:false});
       handle.addEventListener("touchend",async()=>{
         if(!touchDrag)return;
-        clearTimeout(touchDrag.timer);
         if(touchDrag.rafId)cancelAnimationFrame(touchDrag.rafId);
         if(touchDrag.clone)touchDrag.clone.remove();
         card.style.opacity="";card.style.transition="";
