@@ -19,6 +19,9 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, set, get, remove, onValue, update }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+      signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyB01z8Qw-wxnVuHnOEiHdhrtCo_SEUKn5U",
@@ -33,7 +36,10 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    window.FB = { db, ref, set, get, remove, onValue, update };
+    const auth = getAuth(app);
+    window.FB = { db, ref, set, get, remove, onValue, update,
+      auth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+      signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential };
     window.dispatchEvent(new Event("firebase-ready"));
   </script>
 
@@ -177,6 +183,23 @@ async function dbSet(p,v){await FB.set(dbRef(p),v)}
 async function dbRemove(p){await FB.remove(dbRef(p))}
 async function dbUpdate(p,v){await FB.update(dbRef(p),v)}
 function dbListen(p,cb){const u=FB.onValue(dbRef(p),s=>cb(s.exists()?s.val():null));unsubscribers.push(u);return u}
+
+// ── Firebase Authentication glue ──
+// The login UX stays username+password; behind the scenes each username maps to
+// a synthetic email for Firebase email/password auth. Passwords live ONLY in
+// Firebase Auth — never in the database.
+const emailForUsername=u=>`${u}@inv-user.app`;
+// Firebase requires passwords of 6+ chars; legacy accounts allowed 4-5. Pad
+// short ones deterministically so old passwords keep working unchanged.
+const authPw=p=>p.length>=6?p:p+"·".repeat(6-p.length);
+// usernames/<name> → {uid,displayName} and uids/<uid> → {username} let the
+// security rules translate between the app's username keys and auth uids, and
+// give an existence check for sharing that doesn't expose user data.
+async function ensureIdentity(username,displayName){
+  const u=FB.auth&&FB.auth.currentUser;if(!u)return;
+  try{await dbUpdate(`usernames/${username}`,displayName?{uid:u.uid,displayName}:{uid:u.uid})}catch(e){}
+  try{await dbUpdate(`uids/${u.uid}`,{username})}catch(e){}
+}
 
 // Local cache for instant loading. Stored in localStorage so it survives
 // app restarts (sessionStorage is wiped every launch on iOS standalone).
@@ -324,20 +347,50 @@ function renderAuth(){
     const username=ui.value.trim().toLowerCase(),password=pi.value;
     if(!username||!password){err.textContent="יש למלא שם משתמש וסיסמה";return}
     if(username.length<2){err.textContent="שם משתמש חייב להיות לפחות 2 תווים";return}
+    if(mode==="register"&&password.length<6){err.textContent="סיסמה חייבת להיות לפחות 6 תווים";return}
     if(password.length<4){err.textContent="סיסמה חייבת להיות לפחות 4 תווים";return}
+    if(!FB){err.textContent="אין חיבור — נסה שוב";return}
     ab.disabled=true;ab.textContent="...";err.textContent="";
+    const fail=msg=>{err.textContent=msg;ab.disabled=false;ab.textContent=mode==="login"?"התחבר":"צור חשבון";box.classList.add("shaking");setTimeout(()=>box.classList.remove("shaking"),500)};
+    const email=emailForUsername(username);
     try{
-      const ud=await dbGet(`users/${username}`);
       if(mode==="register"){
-        if(ud){err.textContent="שם משתמש כבר תפוס";ab.disabled=false;ab.textContent="צור חשבון";return}
+        try{await FB.createUserWithEmailAndPassword(FB.auth,email,authPw(password))}
+        catch(e){
+          if(e.code==="auth/email-already-in-use"){fail("שם משתמש כבר תפוס")}
+          else if(e.code==="auth/network-request-failed"){fail("שגיאה בחיבור — נסה שוב")}
+          else fail("שגיאה ביצירת החשבון — נסה שוב");
+          return;
+        }
         const dn=ni.value.trim()||username;
-        await dbSet(`users/${username}`,{password,displayName:dn,createdAt:new Date().toISOString()});
+        await ensureIdentity(username,dn);
+        await dbSet(`users/${username}`,{displayName:dn,createdAt:new Date().toISOString()});
         currentUser={username,displayName:dn};localStorage.setItem("inv_user",JSON.stringify(currentUser));renderHome();
       }else{
-        if(!ud||ud.password!==password){err.textContent="שם משתמש או סיסמה שגויים";ab.disabled=false;ab.textContent="התחבר";box.classList.add("shaking");setTimeout(()=>box.classList.remove("shaking"),500);return}
-        currentUser={username,displayName:ud.displayName||username};localStorage.setItem("inv_user",JSON.stringify(currentUser));renderHome();
+        try{await FB.signInWithEmailAndPassword(FB.auth,email,authPw(password))}
+        catch(e){
+          const code=e.code||"";
+          if(code==="auth/network-request-failed"){fail("שגיאה בחיבור — נסה שוב");return}
+          if(code==="auth/too-many-requests"){fail("יותר מדי ניסיונות — נסה שוב בעוד כמה דקות");return}
+          // No auth account (or auth rejected) — legacy migration path: accounts
+          // from before Firebase Auth keep their password in the DB. Verify it,
+          // create the real auth account with the SAME password, then delete the
+          // plaintext copy for good.
+          let legacy=null;
+          try{legacy=await dbGet(`users/${username}/password`)}catch(e2){}
+          if(legacy===null||legacy!==password){fail("שם משתמש או סיסמה שגויים");return}
+          try{await FB.createUserWithEmailAndPassword(FB.auth,email,authPw(password))}
+          catch(e3){fail("שם משתמש או סיסמה שגויים");return}
+          try{await dbRemove(`users/${username}/password`)}catch(e4){}
+        }
+        let ud=null;
+        try{ud=await dbGet(`users/${username}`)}catch(e){}
+        currentUser={username,displayName:(ud&&ud.displayName)||username};
+        localStorage.setItem("inv_user",JSON.stringify(currentUser));
+        await ensureIdentity(username,currentUser.displayName);
+        renderHome();
       }
-    }catch(e){err.textContent="שגיאה בחיבור — נסה שוב";ab.disabled=false;ab.textContent=mode==="login"?"התחבר":"צור חשבון"}
+    }catch(e){fail("שגיאה בחיבור — נסה שוב")}
   }},"התחבר");
   pi.addEventListener("keydown",e=>{if(e.key==="Enter")ab.click()});
   box.append(nr,ui,pi,err,ab);wrap.appendChild(box);render(wrap);ui.focus();
@@ -645,10 +698,18 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
       else if(choice==="share")showShareModal(wrap,whId,wh);
       else if(choice==="copy")showCopyWarehouseModal(wrap,whId,wh);
       else if(choice==="delete")showDeleteModal(wrap,isOwner?`למחוק את "${wh.name}"?`:`לעזוב את "${wh.name}"?`,async()=>{
+        // Membership must be checked BEFORE removing ourselves — the security
+        // rules only let members read a warehouse, so after self-removal the
+        // "is it empty now" check would be denied and the node never cleaned.
+        let mems=null;try{mems=await dbGet(`warehouses/${whId}/members`)}catch(e){}
+        const others=mems?Object.keys(mems).filter(u=>u!==currentUser.username):[];
+        if(others.length===0){
+          await dbRemove(`warehouses/${whId}`);
+          await dbRemove(`itemImages/${whId}`).catch(()=>{});
+        }else{
+          await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+        }
         await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
-        await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
-        const r=await dbGet(`warehouses/${whId}/members`);
-        if(!r||Object.keys(r).length===0)await dbRemove(`warehouses/${whId}`);
       });
     }});
     moreBtn.appendChild(icon("more",18));
@@ -1647,7 +1708,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
           const mems=wh.members?Object.keys(wh.members):[];
           if(mems.includes(target)){err.textContent="כבר חבר";return}
           addBtn.disabled=true;err.textContent='';
-          const tu=await dbGet(`users/${target}`);
+          let tu=null;try{tu=await dbGet(`usernames/${target}`)}catch(e){}
           if(!tu){err.textContent="משתמש לא נמצא";addBtn.disabled=false;return}
           await dbSet(`warehouses/${whId}/members/${target}`,true);
           await dbSet(`users/${target}/warehouses/${whId}`,true);
@@ -1893,7 +1954,7 @@ function showShareModal(parent,whId,wh){
       if(target===currentUser.username){err.textContent="אי אפשר לשתף עם עצמך";return}
       if(members.includes(target)){err.textContent="כבר חבר במחסן";return}
       sb.disabled=true;err.textContent="";suc.textContent="";
-      const tu=await dbGet(`users/${target}`);
+      let tu=null;try{tu=await dbGet(`usernames/${target}`)}catch(e){}
       if(!tu){err.textContent="משתמש לא נמצא";sb.disabled=false;return}
       await dbSet(`warehouses/${whId}/members/${target}`,true);
       await dbSet(`users/${target}/warehouses/${whId}`,true);
@@ -1917,7 +1978,7 @@ function showCopyWarehouseModal(parent,whId,wh){
       const target=inp.value.trim().toLowerCase();if(!target)return;
       if(target===currentUser.username){err.textContent="אי אפשר לשלוח לעצמך";return}
       sendBtn.disabled=true;err.textContent="";suc.textContent="";
-      const tu=await dbGet(`users/${target}`);
+      let tu=null;try{tu=await dbGet(`usernames/${target}`)}catch(e){}
       if(!tu){err.textContent="משתמש לא נמצא";sendBtn.disabled=false;return}
       const newWhId=genId();
       const newItems={};
@@ -2130,7 +2191,9 @@ function showSettingsModal(parent){
       whCardListeners.forEach(f=>f());whCardListeners=[];
       currentUser=null;homeScreen=null;cachedHomeContent=null;
       currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;
-      cacheClearAll();localStorage.removeItem("inv_user");close();renderAuth();
+      cacheClearAll();localStorage.removeItem("inv_user");
+      if(FB&&FB.auth)try{FB.signOut(FB.auth)}catch(e){}
+      close();renderAuth();
     }},"התנתק"));
   });
 }
@@ -2149,14 +2212,18 @@ function showChangePasswordModal(parent){
       err.textContent="";
       const cur=curPi.value,nw=newPi.value,conf=confPi.value;
       if(!cur||!nw||!conf){err.textContent="יש למלא את כל השדות";return}
-      if(nw.length<4){err.textContent="סיסמה חדשה חייבת להיות לפחות 4 תווים";return}
+      if(nw.length<6){err.textContent="סיסמה חדשה חייבת להיות לפחות 6 תווים";return}
       if(nw!==conf){err.textContent="הסיסמאות אינן תואמות";return}
+      if(nw===cur){err.textContent="הסיסמה החדשה זהה לנוכחית";return}
       sb.disabled=true;sb.textContent="...";
       try{
-        const ud=await dbGet(`users/${currentUser.username}`);
-        if(!ud||ud.password!==cur){err.textContent="הסיסמה הנוכחית שגויה";sb.disabled=false;sb.textContent="שמור";return}
-        if(nw===cur){err.textContent="הסיסמה החדשה זהה לנוכחית";sb.disabled=false;sb.textContent="שמור";return}
-        await dbSet(`users/${currentUser.username}/password`,nw);
+        const user=FB.auth.currentUser;
+        if(!user){err.textContent="שגיאה בחיבור — התחבר מחדש";sb.disabled=false;sb.textContent="שמור";return}
+        // Re-authenticate with the current password (verifies it), then update.
+        const cred=FB.EmailAuthProvider.credential(emailForUsername(currentUser.username),authPw(cur));
+        try{await FB.reauthenticateWithCredential(user,cred)}
+        catch(e){err.textContent="הסיסמה הנוכחית שגויה";sb.disabled=false;sb.textContent="שמור";return}
+        await FB.updatePassword(user,authPw(nw));
         close();
       }catch(e){err.textContent="שגיאה בחיבור — נסה שוב";sb.disabled=false;sb.textContent="שמור"}
     }},"שמור");
@@ -2269,10 +2336,24 @@ function init(){
   if(window.FB){FB=window.FB;onFirebaseReady()}
   else window.addEventListener("firebase-ready",()=>{FB=window.FB;onFirebaseReady()});
 }
+let authReady=false;
 function onFirebaseReady(){
-  if(!currentUser){renderAuth();return}
-  if(homeScreen&&cachedHomeContent){attachHomeWarehouseListener(cachedHomeContent,homeScreen)}
-  else renderHome();
+  // The screen may already show cached data (instant load). The real gate is
+  // the Firebase Auth session: without one, DB access is denied by the rules,
+  // so send the user to the login screen — an existing account migrates itself
+  // there on first sign-in.
+  FB.onAuthStateChanged(FB.auth,user=>{
+    if(!user){
+      if(authReady)return; // logout flow already rendered the auth screen
+      authReady=true;
+      currentUser=null;localStorage.removeItem("inv_user");
+      renderAuth();return;
+    }
+    authReady=true;
+    if(!currentUser){renderAuth();return}
+    if(homeScreen&&cachedHomeContent){attachHomeWarehouseListener(cachedHomeContent,homeScreen)}
+    else renderHome();
+  });
 }
 init();
 </script>

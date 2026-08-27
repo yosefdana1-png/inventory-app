@@ -1,0 +1,47 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "usernames": {
+      "$username": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)"
+      }
+    },
+
+    "uids": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "users": {
+      "$username": {
+        ".read": "auth != null && root.child('usernames').child($username).child('uid').val() === auth.uid",
+        ".write": "auth != null && root.child('usernames').child($username).child('uid').val() === auth.uid",
+        "warehouses": {
+          "$whId": {
+            ".write": "auth != null && (root.child('usernames').child($username).child('uid').val() === auth.uid || root.child('warehouses').child($whId).child('members').hasChild(root.child('uids').child(auth.uid).child('username').val()))"
+          }
+        },
+        "password": { ".read": false, ".write": false }
+      }
+    },
+
+    "warehouses": {
+      "$whId": {
+        ".read": "auth != null && data.child('members').hasChild(root.child('uids').child(auth.uid).child('username').val())",
+        ".write": "auth != null && (!data.exists() || data.child('members').hasChild(root.child('uids').child(auth.uid).child('username').val()))"
+      }
+    },
+
+    "itemImages": {
+      "$whId": {
+        ".read": "auth != null && root.child('warehouses').child($whId).child('members').hasChild(root.child('uids').child(auth.uid).child('username').val())",
+        ".write": "auth != null && root.child('warehouses').child($whId).child('members').hasChild(root.child('uids').child(auth.uid).child('username').val())"
+      }
+    }
+  }
+}
