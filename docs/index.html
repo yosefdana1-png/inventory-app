@@ -74,11 +74,12 @@
     .item-card{background:var(--card);border-radius:16px;padding:14px 12px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;transition:all .2s;gap:4px;overflow:hidden}
     .item-card.dragging{opacity:.5;border-color:var(--accent)}
     .item-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
-    /* While a drag is in progress, kill the card's normal .2s transition so the
-       floating clone's transform (and the drag-over highlight) apply instantly
-       instead of lagging/easing behind the finger — that lag is what read as
-       "not smooth" / flickery. */
-    .dragging-active .item-card{transition:none!important}
+    /* Only the card being dragged gets its transition killed, so it tracks the
+       finger with zero lag. The OTHER cards must keep their transition — that's
+       what animates them sliding out of the way. (An earlier version killed
+       transitions on every card in the list, which silently disabled the whole
+       make-room animation.) */
+    .item-card.drag-active{transition:none!important}
     [data-wh-id].drag-over .list-card{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
     .icon-btn{background:none;border:none;color:var(--text-sec);cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center}
     .qty-btn{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
@@ -792,9 +793,25 @@ function indexForY(cardEls,y){
   }
   return cardEls.length-1;
 }
+// Wipes every drag-related inline style off every card in the list. Called at the
+// start and end of every drag so a card can never be left displaced/invisible by
+// a half-finished animation — which is what produced the stuck cards and the
+// card-sized gaps in the list on Android.
+function clearDragStyles(container){
+  [...container.children].forEach(elm=>{
+    elm.style.transition="";elm.style.transform="";elm.style.opacity="";
+    elm.style.zIndex="";elm.style.boxShadow="";
+  });
+}
 function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
   if(fromIndex===toIndex||fromIndex<0||toIndex<0)return cardEls;
   const firstRects=new Map();
+  // Freeze any in-flight transition BEFORE measuring: getBoundingClientRect on a
+  // mid-animation element returns its animated position, not its layout position,
+  // so measuring without this makes each successive reorder compute its offset
+  // against a wrong baseline — the errors compound into the visible gaps.
+  cardEls.forEach(elm=>{if(elm!==skipEl){elm.style.transition="none";elm.style.transform=""}});
+  void container.offsetHeight;
   cardEls.forEach(elm=>firstRects.set(elm,elm.getBoundingClientRect()));
   const newArr=[...cardEls];
   const[moved]=newArr.splice(fromIndex,1);
@@ -951,6 +968,7 @@ function renderItemsList(c,whId,items,wrap){
       card.addEventListener("dragend",()=>{
         card.classList.remove("dragging");
         dragSrcId=null;desktopDrag=null;
+        clearDragStyles(itemsContainer);
       });
       card.addEventListener("dragover",e=>{
         e.preventDefault();e.dataTransfer.dropEffect="move";
@@ -985,14 +1003,18 @@ function renderItemsList(c,whId,items,wrap){
       // card.
       handle.addEventListener("touchstart",e=>{
         e.preventDefault();
-        listContainer.classList.add("dragging-active");
+        // Start from a guaranteed-clean slate — if any previous drag left a card
+        // displaced (interrupted gesture, backgrounded app, etc.) this wipes it
+        // instead of measuring against the broken state.
+        clearDragStyles(itemsContainer);
         const touch=e.touches[0];
         const rect=card.getBoundingClientRect();
         const cardEls=[...itemsContainer.children];
         const dragIndex=cardEls.indexOf(card);
         touchDrag={itemId,grabOffsetY:touch.clientY-rect.top,cardHeight:rect.height,lastClientY:touch.clientY,cardEls,dragIndex,curIndex:dragIndex,rafId:null};
-        card.style.transition="none";
+        card.classList.add("drag-active");
         card.style.zIndex="500";
+        card.style.position="relative";
         card.style.boxShadow="0 8px 24px rgba(0,0,0,.4)";
       },{passive:false});
       const followFinger=()=>{
@@ -1025,20 +1047,28 @@ function renderItemsList(c,whId,items,wrap){
       const finishTouchDrag=async(commit)=>{
         if(!touchDrag)return;
         if(touchDrag.rafId)cancelAnimationFrame(touchDrag.rafId);
-        card.style.transform="";card.style.transition="";card.style.zIndex="";card.style.boxShadow="";
-        listContainer.classList.remove("dragging-active");
+        card.classList.remove("drag-active");
+        card.style.position="";
+        // Hard-reset EVERY card, not just the dragged one — any card left holding a
+        // transform from an interrupted slide-out-of-the-way animation is exactly
+        // what showed up as a card-sized gap in the list.
+        clearDragStyles(itemsContainer);
         const finalEls=touchDrag.cardEls;
         const changed=touchDrag.dragIndex!==touchDrag.curIndex;
         touchDrag=null;
         if(commit&&changed){
           const updates={};
           finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
+          // Update the in-memory order too, so the re-render below (and any smart
+          // in-place update from the Firebase listener) agrees with the new order
+          // instead of briefly snapping items back.
+          finalEls.forEach((elm,i)=>{
+            const entry=items.find(([id])=>id===elm.dataset.itemId);
+            if(entry)entry[1].order=i+1;
+          });
           await dbUpdate(`warehouses/${whId}`,updates);
-        }else if(!commit){
-          // Cancelled mid-gesture — snap the DOM order back to what it was before
-          // this drag started so nothing looks reordered without being saved.
-          renderItemsList(c,whId,items,wrap);
         }
+        renderItemsList(c,whId,items,wrap);
       };
       handle.addEventListener("touchend",()=>finishTouchDrag(true));
       handle.addEventListener("touchcancel",()=>finishTouchDrag(false));
