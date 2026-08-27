@@ -146,6 +146,7 @@
   <symbol id="icon-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></symbol>
   <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></symbol>
   <symbol id="icon-camera" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></symbol>
 </svg>
 
 <div id="app" style="height:100vh;height:100dvh">
@@ -745,7 +746,9 @@ function renderItemsView(c,whId,items,wrap){
     resetBtn.appendChild(icon("reset",14));resetBtn.appendChild(document.createTextNode("אפס כמויות"));
     const exportBtn=el("button",{className:"toolbar-btn",onClick:()=>showExportModal(wrap,currentWhId,currentItems)});
     exportBtn.appendChild(icon("note",14));exportBtn.appendChild(document.createTextNode("יצוא רשימה"));
-    toolbar.append(sortWrap,resetBtn,exportBtn);
+    const importBtn=el("button",{className:"toolbar-btn",style:{display:memberCan('add')?'':'none'},onClick:()=>showImportModal(wrap,currentWhId)});
+    importBtn.appendChild(icon("upload",14));importBtn.appendChild(document.createTextNode("ייבוא"));
+    toolbar.append(sortWrap,resetBtn,exportBtn,importBtn);
     searchWrap.appendChild(toolbar);
     
     // Insert searchWrap into wrap, right before content
@@ -1687,6 +1690,124 @@ function showExportModal(parent,whId,items){
     }},"שתף");
 
     btns.append(copyBtn,shareBtn);m.appendChild(btns);
+  });
+}
+
+// Parses free-form pasted/typed text (or a loaded CSV/TXT file) into item rows.
+// Supports: CSV "שם,כמות,מקט" | "שם (5)" | "שם - 5" | "שם: 5" | "5 שם" | "5x שם" | plain name only.
+function parseImportText(text){
+  return text.split(/\r?\n/)
+    .map(l=>l.trim())
+    .filter(l=>l)
+    .map(line=>{
+      line=line.replace(/^(?:[-*•]|\d+[.)])\s+/,"");
+      let name=line,quantity=0,sku="";
+      if(line.includes(",")){
+        const parts=line.split(",").map(p=>p.trim());
+        if(parts.length>=2&&/^\d+$/.test(parts[1])){
+          name=parts[0];quantity=parseInt(parts[1]);
+          if(parts[2])sku=parts[2];
+          return {name,quantity,sku};
+        }
+      }
+      const skuM=line.match(/\|\s*(?:מק"?ט|sku)\s*:?\s*(.+)$/i);
+      if(skuM){sku=skuM[1].trim();line=line.slice(0,skuM.index).trim()}
+      let m=line.match(/^(.+?)\s*\((\d+)\)\s*$/);
+      if(m){name=m[1].trim();quantity=parseInt(m[2]);return {name,quantity,sku}}
+      m=line.match(/^(.+?)[\s\-–:]+(\d+)\s*$/);
+      if(m&&m[1].trim()){name=m[1].trim();quantity=parseInt(m[2]);return {name,quantity,sku}}
+      m=line.match(/^(\d+)\s*[xX×]?\s+(.+)$/);
+      if(m){quantity=parseInt(m[1]);name=m[2].trim();return {name,quantity,sku}}
+      name=line.trim();
+      return {name,quantity,sku};
+    })
+    .filter(it=>it.name);
+}
+
+function showImportModal(parent,whId){
+  showModal(parent,(m,close)=>{
+    m.appendChild(el("h3",{style:{marginBottom:"4px"}},"ייבוא פריטים"));
+    m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"13px",marginBottom:"12px"}},'הדבק רשימה (למשל מוואטסאפ) או בחר קובץ CSV/טקסט — שורה אחת לכל פריט.'));
+
+    const fileRow=el("div",{style:{display:"flex",gap:"8px",marginBottom:"10px"}});
+    const fileBtn=el("button",{className:"btn btn-ghost",style:{flex:"1"}},"בחר קובץ");
+    const fileInput=el("input",{type:"file",accept:".csv,.txt,text/csv,text/plain",style:{display:"none"}});
+    fileBtn.onclick=()=>fileInput.click();
+    fileInput.addEventListener("change",()=>{
+      const f=fileInput.files[0];if(!f)return;
+      const reader=new FileReader();
+      reader.onload=()=>{ta.value=reader.result};
+      reader.readAsText(f,"UTF-8");
+    });
+    fileRow.append(fileBtn,fileInput);
+    m.appendChild(fileRow);
+
+    const ta=el("textarea",{className:"app-input",rows:"6",placeholder:"לדוגמה:\nחולצה (5)\nמכנס - 3\n2 כובעים",style:{direction:"rtl",lineHeight:"1.7",fontSize:"14px",marginBottom:"12px"}});
+    m.appendChild(ta);
+
+    const previewWrap=el("div",{style:{display:"none",marginBottom:"10px",maxHeight:"300px",overflowY:"auto"}});
+    m.appendChild(previewWrap);
+
+    const err=el("p",{style:{color:"var(--danger)",fontSize:"13px",minHeight:"18px"}});
+    m.appendChild(err);
+
+    let mode="edit";
+    let parsedRows=[];
+
+    function renderPreview(){
+      previewWrap.innerHTML="";
+      parsedRows.forEach((row,idx)=>{
+        const rowEl=el("div",{style:{display:"flex",gap:"6px",marginBottom:"6px",alignItems:"center"}});
+        const nameI=el("input",{className:"app-input",style:{flex:"3",padding:"8px 10px",fontSize:"13px"}});
+        nameI.value=row.name;
+        nameI.addEventListener("input",()=>{row.name=nameI.value});
+        const qtyI=el("input",{className:"app-input",type:"number",inputMode:"numeric",style:{flex:"1",padding:"8px 10px",fontSize:"13px"}});
+        qtyI.value=row.quantity;
+        qtyI.addEventListener("input",()=>{row.quantity=parseInt(qtyI.value)||0});
+        const rmBtn=el("button",{className:"toolbar-btn danger-hover",style:{padding:"6px",flex:"0 0 auto"}});
+        rmBtn.appendChild(icon("close",12));
+        rmBtn.onclick=()=>{parsedRows.splice(idx,1);renderPreview();mainBtn.textContent=`ייבא ${parsedRows.length} פריטים`};
+        rowEl.append(nameI,qtyI,rmBtn);
+        previewWrap.appendChild(rowEl);
+      });
+    }
+
+    const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"8px"}});
+    const cancelBtn=el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול");
+    const mainBtn=el("button",{className:"btn btn-primary",style:{flex:"1"}},"המשך");
+    mainBtn.onclick=async()=>{
+      err.textContent="";
+      if(mode==="edit"){
+        parsedRows=parseImportText(ta.value);
+        if(!parsedRows.length){err.textContent="לא נמצאו פריטים לייבוא";return}
+        renderPreview();
+        mode="preview";
+        ta.style.display="none";fileRow.style.display="none";
+        previewWrap.style.display="";
+        mainBtn.textContent=`ייבא ${parsedRows.length} פריטים`;
+      }else{
+        const rows=parsedRows.filter(r=>r.name&&r.name.trim());
+        if(!rows.length){err.textContent="אין פריטים תקינים";return}
+        mainBtn.disabled=true;mainBtn.textContent="מייבא...";
+        try{
+          const existingItems=await dbGet(`warehouses/${whId}/items`);
+          let maxOrder=0;
+          if(existingItems)Object.values(existingItems).forEach(it=>{if((it.order||0)>maxOrder)maxOrder=it.order||0});
+          const updates={};
+          rows.forEach((r,i)=>{
+            const id=genId();
+            const qty=r.quantity||0;
+            const itemData={name:r.name.trim(),quantity:qty,order:maxOrder+i+1,
+              history:{[genId()]:{action:"נוצר (ייבוא)",amount:qty,by:currentUser.displayName,date:new Date().toISOString()}}};
+            if(r.sku&&r.sku.trim())itemData.sku=r.sku.trim();
+            updates[`items/${id}`]=itemData;
+          });
+          await dbUpdate(`warehouses/${whId}`,updates);
+          close();
+        }catch(e){err.textContent="שגיאה בייבוא — נסה שוב";mainBtn.disabled=false;mainBtn.textContent=`ייבא ${rows.length} פריטים`}
+      }
+    };
+    btns.append(cancelBtn,mainBtn);m.appendChild(btns);
   });
 }
 
