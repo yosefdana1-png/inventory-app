@@ -1342,6 +1342,27 @@ function showWarehouseSettingsModal(parent,whId,wh){
     function refreshMembers(){
       mp.innerHTML='';
       const members=wh.members?Object.keys(wh.members):[];
+      if(isAdmin){
+        const addRow=el("div",{style:{display:"flex",gap:"8px"}});
+        const inp=el("input",{className:"app-input",placeholder:"שם משתמש להוספה",style:{flex:"1"},autocapitalize:"off"});
+        const err=el("p",{style:{color:"var(--danger)",fontSize:"12px",marginTop:"6px",minHeight:"16px"}});
+        const addBtn=el("button",{className:"btn btn-primary",style:{whiteSpace:"nowrap"},onClick:async()=>{
+          const target=inp.value.trim().toLowerCase();if(!target)return;
+          const mems=wh.members?Object.keys(wh.members):[];
+          if(mems.includes(target)){err.textContent="כבר חבר";return}
+          addBtn.disabled=true;err.textContent='';
+          const tu=await dbGet(`users/${target}`);
+          if(!tu){err.textContent="משתמש לא נמצא";addBtn.disabled=false;return}
+          await dbSet(`warehouses/${whId}/members/${target}`,true);
+          await dbSet(`users/${target}/warehouses/${whId}`,true);
+          if(!wh.members)wh.members={};wh.members[target]=true;
+          inp.value='';addBtn.disabled=false;refreshMembers();
+        }},"הוסף");
+        addRow.append(inp,addBtn);
+        mp.appendChild(addRow);mp.appendChild(err);
+        inp.addEventListener("keydown",e=>{if(e.key==="Enter")addBtn.click()});
+        mp.appendChild(el("div",{style:{borderTop:"1px solid var(--border)",margin:"12px 0 10px"}}));
+      }
       members.forEach(u=>{
         const isOwner=u===wh.owner;
         const isCurrentlyAdmin=!isOwner&&wh.roles&&wh.roles[u]==='admin';
@@ -1414,27 +1435,6 @@ function showWarehouseSettingsModal(parent,whId,wh){
         row.appendChild(acts);
         mp.appendChild(row);
       });
-      if(isAdmin){
-        mp.appendChild(el("div",{style:{borderTop:"1px solid var(--border)",margin:"12px 0 10px"}}));
-        const addRow=el("div",{style:{display:"flex",gap:"8px"}});
-        const inp=el("input",{className:"app-input",placeholder:"שם משתמש להוספה",style:{flex:"1"},autocapitalize:"off"});
-        const err=el("p",{style:{color:"var(--danger)",fontSize:"12px",marginTop:"6px",minHeight:"16px"}});
-        const addBtn=el("button",{className:"btn btn-primary",style:{whiteSpace:"nowrap"},onClick:async()=>{
-          const target=inp.value.trim().toLowerCase();if(!target)return;
-          const mems=wh.members?Object.keys(wh.members):[];
-          if(mems.includes(target)){err.textContent="כבר חבר";return}
-          addBtn.disabled=true;err.textContent='';
-          const tu=await dbGet(`users/${target}`);
-          if(!tu){err.textContent="משתמש לא נמצא";addBtn.disabled=false;return}
-          await dbSet(`warehouses/${whId}/members/${target}`,true);
-          await dbSet(`users/${target}/warehouses/${whId}`,true);
-          if(!wh.members)wh.members={};wh.members[target]=true;
-          inp.value='';addBtn.disabled=false;refreshMembers();
-        }},"הוסף");
-        addRow.append(inp,addBtn);
-        mp.appendChild(addRow);mp.appendChild(err);
-        inp.addEventListener("keydown",e=>{if(e.key==="Enter")addBtn.click()});
-      }
     }
     refreshMembers();
 
