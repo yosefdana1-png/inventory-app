@@ -611,6 +611,7 @@ let currentItems=[];
 let currentWhId=null;
 let dragSrcId=null;
 let touchDrag=null;
+let desktopDrag=null;
 let whReorderMode=false;
 let whDragSrcId=null;
 let whTouchDrag=null;
@@ -774,6 +775,43 @@ function renderItemsView(c,whId,items,wrap){
   renderItemsList(c,whId,items,wrap);
 }
 
+// FLIP-style reorder helpers for the manual drag-to-reorder feature: as the
+// dragged card crosses other cards, we move its element to its new slot in the
+// real DOM order and animate every displaced card sliding into place — so
+// items visibly make room for the one being dragged, instead of just
+// highlighting whichever card sits under the pointer.
+function indexForY(cardEls,y){
+  for(let i=0;i<cardEls.length;i++){
+    const r=cardEls[i].getBoundingClientRect();
+    if(y<r.top+r.height/2)return i;
+  }
+  return cardEls.length-1;
+}
+function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
+  if(fromIndex===toIndex||fromIndex<0||toIndex<0)return cardEls;
+  const firstRects=new Map();
+  cardEls.forEach(elm=>firstRects.set(elm,elm.getBoundingClientRect()));
+  const newArr=[...cardEls];
+  const[moved]=newArr.splice(fromIndex,1);
+  newArr.splice(toIndex,0,moved);
+  newArr.forEach(elm=>container.appendChild(elm));
+  newArr.forEach(elm=>{
+    if(elm===skipEl)return;
+    const first=firstRects.get(elm);
+    const last=elm.getBoundingClientRect();
+    const dy=first.top-last.top;
+    if(dy){
+      elm.style.transition="none";
+      elm.style.transform=`translateY(${dy}px)`;
+      requestAnimationFrame(()=>{
+        elm.style.transition="transform .22s cubic-bezier(.2,.8,.2,1)";
+        elm.style.transform="";
+      });
+    }
+  });
+  return newArr;
+}
+
 function renderItemsList(c,whId,items,wrap){
   const listContainer=c.querySelector('#itemsList');
   if(!listContainer)return;
@@ -888,79 +926,77 @@ function renderItemsList(c,whId,items,wrap){
       card.appendChild(handle);
       card.setAttribute("draggable","true");
 
-      // HTML5 drag (desktop)
+      // HTML5 drag (desktop) — live "push apart" reorder: as the pointer crosses
+      // other cards they slide out of the way (FLIP animation) instead of just
+      // highlighting a drop target.
       card.addEventListener("dragstart",e=>{
         dragSrcId=itemId;
         card.classList.add("dragging");
         e.dataTransfer.effectAllowed="move";
         e.dataTransfer.setData("text/plain",itemId);
+        const cardEls=[...itemsContainer.children];
+        desktopDrag={cardEls,dragIndex:cardEls.indexOf(card),curIndex:cardEls.indexOf(card),srcEl:card};
       });
       card.addEventListener("dragend",()=>{
         card.classList.remove("dragging");
-        listContainer.querySelectorAll(".item-card").forEach(c=>c.classList.remove("drag-over"));
+        dragSrcId=null;desktopDrag=null;
       });
       card.addEventListener("dragover",e=>{
         e.preventDefault();e.dataTransfer.dropEffect="move";
-        if(dragSrcId&&dragSrcId!==itemId){
-          listContainer.querySelectorAll(".item-card").forEach(c=>c.classList.remove("drag-over"));
-          card.classList.add("drag-over");
+        if(!desktopDrag)return;
+        const newIndex=indexForY(desktopDrag.cardEls,e.clientY);
+        if(newIndex!==desktopDrag.curIndex){
+          desktopDrag.cardEls=flipReorder(itemsContainer,desktopDrag.cardEls,desktopDrag.curIndex,newIndex,desktopDrag.srcEl);
+          desktopDrag.curIndex=newIndex;
         }
       });
-      card.addEventListener("dragleave",()=>card.classList.remove("drag-over"));
       card.addEventListener("drop",async e=>{
-        e.preventDefault();card.classList.remove("drag-over");
-        if(!dragSrcId||dragSrcId===itemId)return;
-        const fromIdx=filtered.findIndex(([id])=>id===dragSrcId);
-        const toIdx=filtered.findIndex(([id])=>id===itemId);
-        if(fromIdx===-1||toIdx===-1)return;
-        const newOrd=[...filtered];const[moved]=newOrd.splice(fromIdx,1);newOrd.splice(toIdx,0,moved);
-        const updates={};newOrd.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
-        dragSrcId=null;
-        await dbUpdate(`warehouses/${whId}`,updates);
+        e.preventDefault();
+        if(!desktopDrag)return;
+        const finalEls=desktopDrag.cardEls;
+        const changed=desktopDrag.dragIndex!==desktopDrag.curIndex;
+        if(changed){
+          const updates={};
+          finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
+          await dbUpdate(`warehouses/${whId}`,updates);
+        }
       });
 
-      // Touch drag (mobile) — clone position updates use `transform` (compositor-only,
-      // no layout/reflow) instead of `top`, and hit-testing is throttled to one check
-      // per animation frame so touchmove never blocks on DOM work. This is what keeps
-      // the drag feeling smooth instead of stuttering behind the finger.
+      // Touch drag (mobile) — same live push-apart reorder, driven by the floating
+      // clone's position each animation frame. The clone follows the finger via
+      // `transform` (compositor-only, no layout cost); the real card acts as an
+      // invisible placeholder that FLIP-swaps into its new slot as other cards
+      // make room for it.
       handle.addEventListener("touchstart",e=>{
         e.preventDefault();
         listContainer.classList.add("dragging-active");
         const touch=e.touches[0];
         const rect=card.getBoundingClientRect();
-        touchDrag={itemId,startY:touch.clientY,rectTop:rect.top,rectLeft:rect.left,rectWidth:rect.width,clone:null,targetId:null,lastTargetId:null,rafId:null,pendingDy:0};
-        // The drag handle is a dedicated grip icon (not the whole row), so there's
-        // no need to wait-and-see whether this is a scroll vs a drag — start
-        // tracking the finger immediately. The earlier 80ms hold delay before
-        // creating the floating clone was exactly the "feels delayed" lag, and
-        // it also made the clone jump on creation to catch up to any movement
-        // that happened during that wait.
+        const cardEls=[...itemsContainer.children];
+        const dragIndex=cardEls.indexOf(card);
+        touchDrag={itemId,startY:touch.clientY,rectTop:rect.top,rectHeight:rect.height,rectLeft:rect.left,rectWidth:rect.width,clone:null,cardEls,dragIndex,curIndex:dragIndex,rafId:null,pendingDy:0};
         const clone=card.cloneNode(true);
-        clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;will-change:transform;transition:none;transform:translateY(0);`;
+        clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.9;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;will-change:transform;transition:none;transform:translateY(0);`;
         document.body.appendChild(clone);
         touchDrag.clone=clone;
         card.style.transition="none";
-        card.style.opacity="0.3";
+        card.style.opacity="0";
       },{passive:false});
       handle.addEventListener("touchmove",e=>{
         if(!touchDrag)return;e.preventDefault();
         const touch=e.touches[0];
         touchDrag.pendingDy=touch.clientY-touchDrag.startY;
-        touchDrag.lastX=touch.clientX;touchDrag.lastY=touch.clientY;
         if(touchDrag.clone)touchDrag.clone.style.transform=`translateY(${touchDrag.pendingDy}px)`;
         if(touchDrag.rafId)return;
         touchDrag.rafId=requestAnimationFrame(()=>{
           touchDrag.rafId=null;
           if(!touchDrag)return;
-          const under=document.elementFromPoint(touchDrag.lastX,touchDrag.lastY);
-          const targetCard=under?.closest("[data-item-id]");
-          const tid=targetCard?.dataset.itemId;
-          if(tid===touchDrag.lastTargetId)return;
-          touchDrag.lastTargetId=tid;
-          const prevOver=listContainer.querySelector(".item-card.drag-over");
-          if(prevOver)prevOver.classList.remove("drag-over");
-          if(tid&&tid!==touchDrag.itemId){targetCard.classList.add("drag-over");touchDrag.targetId=tid;}
-          else touchDrag.targetId=null;
+          const centerY=touchDrag.rectTop+touchDrag.rectHeight/2+touchDrag.pendingDy;
+          const newIndex=indexForY(touchDrag.cardEls,centerY);
+          if(newIndex!==touchDrag.curIndex){
+            touchDrag.cardEls=flipReorder(itemsContainer,touchDrag.cardEls,touchDrag.curIndex,newIndex,card);
+            touchDrag.curIndex=newIndex;
+          }
         });
       },{passive:false});
       handle.addEventListener("touchend",async()=>{
@@ -969,18 +1005,13 @@ function renderItemsList(c,whId,items,wrap){
         if(touchDrag.clone)touchDrag.clone.remove();
         card.style.opacity="";card.style.transition="";
         listContainer.classList.remove("dragging-active");
-        listContainer.querySelectorAll(".item-card").forEach(c=>c.classList.remove("drag-over"));
-        const tid=touchDrag.targetId;
-        const srcId=touchDrag.itemId;
+        const finalEls=touchDrag.cardEls;
+        const changed=touchDrag.dragIndex!==touchDrag.curIndex;
         touchDrag=null;
-        if(tid&&srcId!==tid){
-          const fromIdx=filtered.findIndex(([id])=>id===srcId);
-          const toIdx=filtered.findIndex(([id])=>id===tid);
-          if(fromIdx!==-1&&toIdx!==-1){
-            const newOrd=[...filtered];const[moved]=newOrd.splice(fromIdx,1);newOrd.splice(toIdx,0,moved);
-            const updates={};newOrd.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
-            await dbUpdate(`warehouses/${whId}`,updates);
-          }
+        if(changed){
+          const updates={};
+          finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
+          await dbUpdate(`warehouses/${whId}`,updates);
         }
       });
     }
