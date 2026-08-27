@@ -787,9 +787,16 @@ function renderItemsView(c,whId,items,wrap){
 // items visibly make room for the one being dragged, instead of just
 // highlighting whichever card sits under the pointer.
 function indexForY(cardEls,y){
+  // Measure each card's LAYOUT position, not its animated position: cards mid
+  // slide (transform transition running) report their in-flight rect, so near a
+  // slot boundary the computed index flip-flopped every frame and the whole list
+  // visibly shook. Every drag transform we set is an inline translateY, so
+  // subtracting it back out of the rect gives the true resting position.
   for(let i=0;i<cardEls.length;i++){
     const r=cardEls[i].getBoundingClientRect();
-    if(y<r.top+r.height/2)return i;
+    const m=/translateY\((-?[\d.]+)px\)/.exec(cardEls[i].style.transform);
+    const top=m?r.top-parseFloat(m[1]):r.top;
+    if(y<top+r.height/2)return i;
   }
   return cardEls.length-1;
 }
@@ -816,7 +823,20 @@ function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
   const newArr=[...cardEls];
   const[moved]=newArr.splice(fromIndex,1);
   newArr.splice(toIndex,0,moved);
-  newArr.forEach(elm=>container.appendChild(elm));
+  // Commit the new order WITHOUT ever detaching skipEl (the card being
+  // dragged): appendChild on a node = detach + re-insert, and on Android
+  // Chrome detaching the element an active touch sequence started on silently
+  // kills the stream — no more touchmove, often no touchcancel either — which
+  // is exactly the mid-drag freeze. Iterating in reverse and moving only the
+  // OTHER cards around skipEl produces the same final order while the touch
+  // target stays attached the whole time.
+  let domRef=null;
+  for(let i=newArr.length-1;i>=0;i--){
+    const elm=newArr[i];
+    if(elm===skipEl){domRef=elm;continue}
+    if(elm.nextSibling!==domRef)container.insertBefore(elm,domRef);
+    domRef=elm;
+  }
   newArr.forEach(elm=>{
     if(elm===skipEl)return;
     const first=firstRects.get(elm);
@@ -1018,10 +1038,15 @@ function renderItemsList(c,whId,items,wrap){
         card.style.boxShadow="0 8px 24px rgba(0,0,0,.4)";
       },{passive:false});
       const followFinger=()=>{
-        // Natural top = where the card sits in the flow right now, transform
-        // cleared first since the rect would otherwise include our own offset.
-        card.style.transform="none";
-        const naturalTop=card.getBoundingClientRect().top;
+        // Natural top = where the card sits in the flow right now. Computed by
+        // subtracting our own inline translateY back out of the measured rect —
+        // NOT by setting transform:"none" and re-measuring, which is what this
+        // used to do: that tore down the card's compositor layer and forced two
+        // synchronous layouts every single frame, and on iOS that showed up as
+        // the card visibly trembling/jittering under the finger.
+        const r=card.getBoundingClientRect();
+        const m=/translateY\((-?[\d.]+)px\)/.exec(card.style.transform);
+        const naturalTop=m?r.top-parseFloat(m[1]):r.top;
         card.style.transform=`translateY(${touchDrag.lastClientY-touchDrag.grabOffsetY-naturalTop}px)`;
       };
       handle.addEventListener("touchmove",e=>{
