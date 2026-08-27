@@ -536,40 +536,92 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
       await dbUpdate(`users/${currentUser.username}/warehouses`,upd);
     });
 
-    // Touch drag
+    // Touch drag — same transform-only mechanism as the items list: geometry
+    // is measured ONCE at touchstart, the dragged card follows the finger with
+    // a transform, displaced cards slide by a fixed precomputed distance, the
+    // drop slot is derived purely from the frozen geometry, and the real
+    // re-order happens exactly once at drop. No DOM mutations and no
+    // measurements mid-drag (Android drops the touch stream on DOM churn; live
+    // measurement of animating cards made the drop slot oscillate on iOS).
     handle.addEventListener("touchstart",e=>{
       e.preventDefault();
-      const touch=e.touches[0];const rect=cardWrapper.getBoundingClientRect();
-      whTouchDrag={whId,startY:touch.clientY,rectTop:rect.top,rectLeft:rect.left,rectWidth:rect.width,clone:null,targetId:null};
-      whTouchDrag.timer=setTimeout(()=>{
-        const clone=cardWrapper.cloneNode(true);
-        clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;`;
-        document.body.appendChild(clone);whTouchDrag.clone=clone;cardWrapper.style.opacity="0.3";
-      },80);
+      if(whTouchDrag)return; // a second finger must not hijack an active drag
+      const container=cardWrapper.parentElement;
+      // Clean slate in case a previous drag was interrupted mid-animation.
+      [...container.children].forEach(elm=>{elm.style.transition="";elm.style.transform="";elm.style.zIndex="";elm.style.position="";elm.style.boxShadow=""});
+      const touch=e.touches[0];
+      const cardEls=[...container.children];
+      const rects=cardEls.map(elm=>elm.getBoundingClientRect());
+      const dragIndex=cardEls.indexOf(cardWrapper);
+      const rect=rects[dragIndex];
+      const gap=rects.length>1?rects[1].top-rects[0].bottom:10;
+      whTouchDrag={whId,container,grabOffsetY:touch.clientY-rect.top,cardHeight:rect.height,
+        lastClientY:touch.clientY,cardEls,dragIndex,curIndex:dragIndex,rafId:null,
+        startTop:rect.top,mids:rects.map(r=>r.top+r.height/2),shift:rect.height+gap,
+        docEnd:null,docCancel:null};
+      cardWrapper.style.transition="none";
+      cardWrapper.style.zIndex="500";
+      cardWrapper.style.position="relative";
+      cardWrapper.style.boxShadow="0 8px 24px rgba(0,0,0,.4)";
+      whTouchDrag.docEnd=ev=>{if(ev.touches.length===0)finishWhTouchDrag(true)};
+      whTouchDrag.docCancel=ev=>{if(ev.touches.length===0)finishWhTouchDrag(false)};
+      document.addEventListener("touchend",whTouchDrag.docEnd);
+      document.addEventListener("touchcancel",whTouchDrag.docCancel);
     },{passive:false});
+    const updateWhDragFrame=()=>{
+      const top=whTouchDrag.lastClientY-whTouchDrag.grabOffsetY;
+      cardWrapper.style.transform=`translateY(${top-whTouchDrag.startTop}px)`;
+      const center=top+whTouchDrag.cardHeight/2;
+      let newIndex=0;
+      for(let i=0;i<whTouchDrag.mids.length;i++){
+        if(i===whTouchDrag.dragIndex)continue;
+        if(center>whTouchDrag.mids[i])newIndex++;
+      }
+      if(newIndex!==whTouchDrag.curIndex){
+        whTouchDrag.curIndex=newIndex;
+        whTouchDrag.cardEls.forEach((elm,i)=>{
+          if(i===whTouchDrag.dragIndex)return;
+          let dy=0;
+          if(i>whTouchDrag.dragIndex&&i<=whTouchDrag.curIndex)dy=-whTouchDrag.shift;
+          else if(i<whTouchDrag.dragIndex&&i>=whTouchDrag.curIndex)dy=whTouchDrag.shift;
+          const t=dy?`translateY(${dy}px)`:"";
+          if(elm.style.transform!==t){
+            elm.style.transition="transform .22s cubic-bezier(.2,.8,.2,1)";
+            elm.style.transform=t;
+          }
+        });
+      }
+    };
     handle.addEventListener("touchmove",e=>{
       if(!whTouchDrag)return;e.preventDefault();
-      const touch=e.touches[0];const dy=touch.clientY-whTouchDrag.startY;
-      if(whTouchDrag.clone)whTouchDrag.clone.style.top=(whTouchDrag.rectTop+dy)+"px";
-      const under=document.elementFromPoint(touch.clientX,touch.clientY);
-      const targetCard=under?.closest("[data-wh-id]");const tid=targetCard?.dataset.whId;
-      document.querySelectorAll('[data-wh-id]').forEach(c=>c.classList.remove("drag-over"));
-      if(tid&&tid!==whTouchDrag.whId){targetCard.classList.add("drag-over");whTouchDrag.targetId=tid;}
-      else whTouchDrag.targetId=null;
+      whTouchDrag.lastClientY=e.touches[0].clientY;
+      if(whTouchDrag.rafId)return;
+      whTouchDrag.rafId=requestAnimationFrame(()=>{
+        if(!whTouchDrag)return;
+        whTouchDrag.rafId=null;
+        updateWhDragFrame();
+      });
     },{passive:false});
-    // touchcancel too — Android can cancel a touch sequence without firing
-    // touchend, which would otherwise leave the floating clone stuck on screen
-    // forever (it's appended to document.body, outside the normal re-render).
     const finishWhTouchDrag=async(commit)=>{
       if(!whTouchDrag)return;
-      clearTimeout(whTouchDrag.timer);if(whTouchDrag.clone)whTouchDrag.clone.remove();
-      cardWrapper.style.opacity="";
-      document.querySelectorAll('[data-wh-id]').forEach(c=>c.classList.remove("drag-over"));
-      const tid=whTouchDrag.targetId;const srcId=whTouchDrag.whId;whTouchDrag=null;
-      if(commit&&tid&&srcId!==tid){
-        const newOrder=[...lastHomeWhIds];
-        const fromIdx=newOrder.indexOf(srcId);const toIdx=newOrder.indexOf(tid);
-        if(fromIdx!==-1&&toIdx!==-1){newOrder.splice(fromIdx,1);newOrder.splice(toIdx,0,srcId);}
+      if(whTouchDrag.rafId)cancelAnimationFrame(whTouchDrag.rafId);
+      document.removeEventListener("touchend",whTouchDrag.docEnd);
+      document.removeEventListener("touchcancel",whTouchDrag.docCancel);
+      const{cardEls,dragIndex,curIndex,container}=whTouchDrag;
+      whTouchDrag=null;
+      [...container.children].forEach(elm=>{elm.style.transition="";elm.style.transform="";elm.style.zIndex="";elm.style.position="";elm.style.boxShadow=""});
+      if(commit&&dragIndex!==curIndex){
+        // Wrapper ids are wh-<id> from renderWarehouseList, present even before
+        // a card's data arrives, so derive the new order from them.
+        const newOrder=cardEls.map(elm=>elm.id.slice(3));
+        const[moved]=newOrder.splice(dragIndex,1);
+        newOrder.splice(curIndex,0,moved);
+        // Re-render synchronously in the new order BEFORE the async DB write —
+        // the DOM was deliberately left untouched during the drag, so this is
+        // what prevents a visible snap-back while the write is in flight.
+        lastHomeWhIds=newOrder;
+        currentWhIds=[];
+        if(cachedHomeContent&&homeScreen)renderWarehouseList(cachedHomeContent,lastHomeWhIds,homeScreen);
         const upd={};newOrder.forEach((id,i)=>{upd[id]=i+1});
         await dbUpdate(`users/${currentUser.username}/warehouses`,upd);
       }
