@@ -632,9 +632,11 @@ function renderListDetail(whId){
   const hl=el("div",{style:{display:"flex",gap:"8px"}});
   const rb=el("button",{className:"icon-btn",onClick:()=>{rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),600)}});
   rb.appendChild(icon("refresh",18));
+  const historyBtn=el("button",{className:"icon-btn",onClick:()=>currentWhData&&showWarehouseHistoryModal(wrap,currentWhData)});
+  historyBtn.appendChild(icon("history",20));
   const settingsBtn=el("button",{className:"icon-btn",onClick:()=>currentWhData&&showWarehouseSettingsModal(wrap,whId,currentWhData)});
   settingsBtn.appendChild(icon("settings",20));
-  hl.append(rb,settingsBtn);header.append(hr,hl);wrap.appendChild(header);
+  hl.append(rb,historyBtn,settingsBtn);header.append(hr,hl);wrap.appendChild(header);
   const content=el("div",{style:{padding:"16px 16px 0"}});wrap.appendChild(content);
   const fab=el("button",{className:"fab",onClick:()=>showNewItemModal(wrap,whId)});
   fab.appendChild(icon("plus",24));wrap.appendChild(fab);
@@ -1276,6 +1278,48 @@ function showHistoryModal(parent,item){
     });
     m.appendChild(hc);
     m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"16px"},onClick:close},"סגור"));
+  });
+}
+
+function showWarehouseHistoryModal(parent,wh){
+  showModal(parent,(m,close)=>{
+    m.style.position="relative";
+    const closeX=el("button",{style:{position:"absolute",top:"16px",left:"16px",width:"32px",height:"32px",borderRadius:"50%",border:"none",background:"transparent",color:"var(--text-sec)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"},onClick:close});
+    closeX.appendChild(icon("close",18));
+    m.appendChild(closeX);
+    m.appendChild(el("h3",{style:{marginBottom:"4px"}},"היסטוריית מחסן"));
+    m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"13px",marginBottom:"12px"}},wh.name));
+
+    const items=wh.items?Object.entries(wh.items):[];
+    let entries=[];
+    items.forEach(([,item])=>{
+      if(!item.history)return;
+      Object.values(item.history).forEach(h=>{entries.push({...h,itemName:item.name})});
+    });
+    entries.sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+    const hc=el("div",{style:{maxHeight:"400px",overflowY:"auto"}});
+    if(!entries.length){
+      hc.appendChild(el("p",{style:{color:"var(--text-muted)",fontSize:"14px",textAlign:"center",padding:"20px"}},"אין היסטוריה עדיין"));
+    }else{
+      entries.slice(0,200).forEach(h=>{
+        const row=el("div",{className:"history-row"});
+        const left=el("div");
+        const col=h.action==="הוספה"?"var(--success)":h.action==="הורדה"?"var(--danger)":h.action==="איפוס"?"var(--warning)":"var(--accent)";
+        const line1=el("div",{style:{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"5px"}});
+        line1.appendChild(el("span",{style:{fontSize:"13px",fontWeight:"600"}},h.itemName||"פריט"));
+        line1.appendChild(el("span",{style:{fontSize:"12px",color:col}},h.action||""));
+        if(h.amount!==undefined)line1.appendChild(el("span",{style:{fontSize:"12px",color:"var(--text-sec)"}},`${h.amount} יח׳`));
+        if(h.result!==undefined)line1.appendChild(el("span",{style:{fontSize:"11px",color:"var(--text-muted)"}},`→ ${h.result}`));
+        left.appendChild(line1);
+        if(h.by)left.appendChild(el("div",{style:{fontSize:"11px",color:"var(--text-muted)",marginTop:"2px"}},h.by));
+        const d=new Date(h.date);
+        const right=el("span",{style:{fontSize:"11px",color:"var(--text-muted)",direction:"ltr",whiteSpace:"nowrap"}},d.toLocaleDateString("he-IL")+" "+d.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"}));
+        row.append(left,right);hc.appendChild(row);
+      });
+    }
+    m.appendChild(hc);
+    if(entries.length>200)m.appendChild(el("p",{style:{fontSize:"12px",color:"var(--text-muted)",textAlign:"center",marginTop:"10px"}},`מוצגות 200 הפעולות האחרונות מתוך ${entries.length}`));
   });
 }
 
