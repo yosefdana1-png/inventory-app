@@ -678,7 +678,7 @@ function renderListDetail(whId){
     // Apply default sort from warehouse settings — but never override an active
     // manual-reorder session, or every drag-drop write (which re-triggers this
     // listener) would snap items back to the warehouse's default sort.
-    if(data.sortMode&&data.sortMode!=='manual'&&!reorderMode)currentSort=data.sortMode;
+    if(data.sortMode&&!reorderMode)currentSort=data.sortMode;
     renderItemsView(content,whId,items,wrap);
   });
 }
@@ -743,6 +743,11 @@ function renderItemsView(c,whId,items,wrap){
           return (a[1].quantity||0)-(b[1].quantity||0);
         });
         const updates={};sorted.forEach(([id],i)=>{updates[`items/${id}/order`]=i+1});
+        // These buttons rewrite the shared order for everyone, so the warehouse
+        // must switch to manual mode or a non-manual default sort keeps
+        // overriding what was just written.
+        updates["sortMode"]="manual";
+        if(currentWhData)currentWhData.sortMode="manual";
         await dbUpdate(`warehouses/${currentWhId}`,updates);
       }
     }});
@@ -1007,6 +1012,8 @@ function renderItemsList(c,whId,items,wrap){
         if(changed){
           const updates={};
           finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
+          updates["sortMode"]="manual"; // see the touch-drag commit comment
+          if(currentWhData)currentWhData.sortMode="manual";
           await dbUpdate(`warehouses/${whId}`,updates);
         }
       });
@@ -1121,6 +1128,11 @@ function renderItemsList(c,whId,items,wrap){
           renderItemsList(c,whId,items,wrap);
           const updates={};
           finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
+          // Without this, a warehouse whose default sort is alpha/qty re-sorts
+          // on every other device and the manual order is silently invisible
+          // there (and here too, after leaving and re-entering the list).
+          updates["sortMode"]="manual";
+          if(currentWhData)currentWhData.sortMode="manual";
           await dbUpdate(`warehouses/${whId}`,updates);
         }else{
           renderItemsList(c,whId,items,wrap);
