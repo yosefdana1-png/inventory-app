@@ -1011,89 +1011,120 @@ function renderItemsList(c,whId,items,wrap){
         }
       });
 
-      // Touch drag (mobile) — no floating clone. The real card itself is lifted
-      // (transform + shadow) and follows the finger directly; other cards FLIP
-      // out of the way as it crosses them. A clone appended to document.body was
-      // the earlier design, but on Android a cancelled/lost touch sequence could
-      // leave that clone orphaned on screen forever since nothing but our own
-      // cleanup code would ever remove it. With no second node to lose track of,
-      // there's nothing left to get stuck: worst case the real card just keeps
-      // whatever transform it had, and the very next full re-render (leaving
-      // reorder mode, or any Firebase update) wipes it clean like every other
-      // card.
+      // Touch drag (mobile) — transform-only while the finger is down. The
+      // previous design re-ordered the real DOM on every crossing (FLIP), which
+      // caused both mobile bugs: (1) detaching/re-inserting cards mid-gesture
+      // can break the Android touch stream, so touchend/touchcancel never
+      // arrive and the lifted card stays stranded on top of the list until the
+      // next drag's cleanup; (2) picking the drop slot by measuring cards that
+      // are mid-slide returns their in-flight positions, so near a boundary the
+      // computed slot flip-flopped every frame and the list below the finger
+      // visibly shook (iPhone). Now NOTHING in the DOM moves and NOTHING is
+      // measured during the drag: the layout is measured once at touchstart,
+      // the dragged card follows the finger with a transform, displaced cards
+      // slide by a fixed precomputed distance, and the drop slot is derived
+      // purely from that frozen geometry. The real re-order happens exactly
+      // once, at drop, via the normal re-render.
       handle.addEventListener("touchstart",e=>{
         e.preventDefault();
+        if(touchDrag)return; // a second finger must not hijack an active drag
         // Start from a guaranteed-clean slate — if any previous drag left a card
         // displaced (interrupted gesture, backgrounded app, etc.) this wipes it
         // instead of measuring against the broken state.
         clearDragStyles(itemsContainer);
         const touch=e.touches[0];
-        const rect=card.getBoundingClientRect();
         const cardEls=[...itemsContainer.children];
+        const rects=cardEls.map(elm=>elm.getBoundingClientRect());
         const dragIndex=cardEls.indexOf(card);
-        touchDrag={itemId,grabOffsetY:touch.clientY-rect.top,cardHeight:rect.height,lastClientY:touch.clientY,cardEls,dragIndex,curIndex:dragIndex,rafId:null};
+        const rect=rects[dragIndex];
+        const gap=rects.length>1?rects[1].top-rects[0].bottom:8;
+        touchDrag={itemId,grabOffsetY:touch.clientY-rect.top,cardHeight:rect.height,
+          lastClientY:touch.clientY,cardEls,dragIndex,curIndex:dragIndex,rafId:null,
+          startTop:rect.top,
+          // Frozen geometry: every card's original midpoint, and how far a
+          // displaced card must slide (one dragged-card slot).
+          mids:rects.map(r=>r.top+r.height/2),shift:rect.height+gap,
+          docEnd:null,docCancel:null};
         card.classList.add("drag-active");
         card.style.zIndex="500";
         card.style.position="relative";
         card.style.boxShadow="0 8px 24px rgba(0,0,0,.4)";
+        // Safety net: also end the drag from document level, in case the handle
+        // itself ever misses the end of the stream. Only when the LAST finger
+        // lifts, so resting a second finger on the screen can't end the drag.
+        touchDrag.docEnd=ev=>{if(ev.touches.length===0)finishTouchDrag(true)};
+        touchDrag.docCancel=ev=>{if(ev.touches.length===0)finishTouchDrag(false)};
+        document.addEventListener("touchend",touchDrag.docEnd);
+        document.addEventListener("touchcancel",touchDrag.docCancel);
       },{passive:false});
-      const followFinger=()=>{
-        // Natural top = where the card sits in the flow right now. Computed by
-        // subtracting our own inline translateY back out of the measured rect —
-        // NOT by setting transform:"none" and re-measuring, which is what this
-        // used to do: that tore down the card's compositor layer and forced two
-        // synchronous layouts every single frame, and on iOS that showed up as
-        // the card visibly trembling/jittering under the finger.
-        const r=card.getBoundingClientRect();
-        const m=/translateY\((-?[\d.]+)px\)/.exec(card.style.transform);
-        const naturalTop=m?r.top-parseFloat(m[1]):r.top;
-        card.style.transform=`translateY(${touchDrag.lastClientY-touchDrag.grabOffsetY-naturalTop}px)`;
+      const updateDragFrame=()=>{
+        const top=touchDrag.lastClientY-touchDrag.grabOffsetY;
+        card.style.transform=`translateY(${top-touchDrag.startTop}px)`;
+        // Drop slot from the geometry frozen at touchstart: how many OTHER
+        // cards' original midpoints sit above the dragged card's center. Static
+        // inputs, so the result can't oscillate the way live measurement of
+        // animating cards did.
+        const center=top+touchDrag.cardHeight/2;
+        let newIndex=0;
+        for(let i=0;i<touchDrag.mids.length;i++){
+          if(i===touchDrag.dragIndex)continue;
+          if(center>touchDrag.mids[i])newIndex++;
+        }
+        if(newIndex!==touchDrag.curIndex){
+          touchDrag.curIndex=newIndex;
+          touchDrag.cardEls.forEach((elm,i)=>{
+            if(i===touchDrag.dragIndex)return;
+            let dy=0;
+            if(i>touchDrag.dragIndex&&i<=touchDrag.curIndex)dy=-touchDrag.shift;
+            else if(i<touchDrag.dragIndex&&i>=touchDrag.curIndex)dy=touchDrag.shift;
+            const t=dy?`translateY(${dy}px)`:"";
+            if(elm.style.transform!==t){
+              elm.style.transition="transform .22s cubic-bezier(.2,.8,.2,1)";
+              elm.style.transform=t;
+            }
+          });
+        }
       };
       handle.addEventListener("touchmove",e=>{
         if(!touchDrag)return;e.preventDefault();
         touchDrag.lastClientY=e.touches[0].clientY;
         if(touchDrag.rafId)return;
         touchDrag.rafId=requestAnimationFrame(()=>{
-          touchDrag.rafId=null;
           if(!touchDrag)return;
-          followFinger();
-          const cardCenterY=touchDrag.lastClientY-touchDrag.grabOffsetY+touchDrag.cardHeight/2;
-          const newIndex=indexForY(touchDrag.cardEls,cardCenterY);
-          if(newIndex!==touchDrag.curIndex){
-            touchDrag.cardEls=flipReorder(itemsContainer,touchDrag.cardEls,touchDrag.curIndex,newIndex,card);
-            touchDrag.curIndex=newIndex;
-            followFinger();
-          }
+          touchDrag.rafId=null;
+          updateDragFrame();
         });
       },{passive:false});
-      // touchend AND touchcancel both need to clean up — Android in particular can
-      // cancel an in-progress touch (e.g. if it decides the gesture is a scroll or
-      // a system edge-swipe) without ever firing touchend.
       const finishTouchDrag=async(commit)=>{
         if(!touchDrag)return;
         if(touchDrag.rafId)cancelAnimationFrame(touchDrag.rafId);
+        document.removeEventListener("touchend",touchDrag.docEnd);
+        document.removeEventListener("touchcancel",touchDrag.docCancel);
         card.classList.remove("drag-active");
         card.style.position="";
-        // Hard-reset EVERY card, not just the dragged one — any card left holding a
-        // transform from an interrupted slide-out-of-the-way animation is exactly
-        // what showed up as a card-sized gap in the list.
-        clearDragStyles(itemsContainer);
-        const finalEls=touchDrag.cardEls;
-        const changed=touchDrag.dragIndex!==touchDrag.curIndex;
+        const{cardEls,dragIndex,curIndex}=touchDrag;
         touchDrag=null;
+        clearDragStyles(itemsContainer);
+        const changed=dragIndex!==curIndex;
         if(commit&&changed){
-          const updates={};
-          finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
-          // Update the in-memory order too, so the re-render below (and any smart
-          // in-place update from the Firebase listener) agrees with the new order
-          // instead of briefly snapping items back.
+          const finalEls=[...cardEls];
+          const[moved]=finalEls.splice(dragIndex,1);
+          finalEls.splice(curIndex,0,moved);
+          // Update the in-memory order FIRST and re-render synchronously — the
+          // DOM was deliberately left in the old order during the drag, so
+          // rendering before the (async) DB write is what prevents a visible
+          // snap-back to the old order while the write is in flight.
           finalEls.forEach((elm,i)=>{
             const entry=items.find(([id])=>id===elm.dataset.itemId);
             if(entry)entry[1].order=i+1;
           });
+          renderItemsList(c,whId,items,wrap);
+          const updates={};
+          finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
           await dbUpdate(`warehouses/${whId}`,updates);
+        }else{
+          renderItemsList(c,whId,items,wrap);
         }
-        renderItemsList(c,whId,items,wrap);
       };
       handle.addEventListener("touchend",()=>finishTouchDrag(true));
       handle.addEventListener("touchcancel",()=>finishTouchDrag(false));
