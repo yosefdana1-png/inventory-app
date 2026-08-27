@@ -973,11 +973,16 @@ function renderItemsList(c,whId,items,wrap){
         }
       });
 
-      // Touch drag (mobile) — same live push-apart reorder, driven by the floating
-      // clone's position each animation frame. The clone follows the finger via
-      // `transform` (compositor-only, no layout cost); the real card acts as an
-      // invisible placeholder that FLIP-swaps into its new slot as other cards
-      // make room for it.
+      // Touch drag (mobile) — no floating clone. The real card itself is lifted
+      // (transform + shadow) and follows the finger directly; other cards FLIP
+      // out of the way as it crosses them. A clone appended to document.body was
+      // the earlier design, but on Android a cancelled/lost touch sequence could
+      // leave that clone orphaned on screen forever since nothing but our own
+      // cleanup code would ever remove it. With no second node to lose track of,
+      // there's nothing left to get stuck: worst case the real card just keeps
+      // whatever transform it had, and the very next full re-render (leaving
+      // reorder mode, or any Firebase update) wipes it clean like every other
+      // card.
       handle.addEventListener("touchstart",e=>{
         e.preventDefault();
         listContainer.classList.add("dragging-active");
@@ -985,42 +990,42 @@ function renderItemsList(c,whId,items,wrap){
         const rect=card.getBoundingClientRect();
         const cardEls=[...itemsContainer.children];
         const dragIndex=cardEls.indexOf(card);
-        touchDrag={itemId,startY:touch.clientY,rectTop:rect.top,rectHeight:rect.height,rectLeft:rect.left,rectWidth:rect.width,clone:null,cardEls,dragIndex,curIndex:dragIndex,rafId:null,pendingDy:0};
-        const clone=card.cloneNode(true);
-        clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.9;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;will-change:transform;transition:none;transform:translateY(0);`;
-        document.body.appendChild(clone);
-        touchDrag.clone=clone;
+        touchDrag={itemId,grabOffsetY:touch.clientY-rect.top,cardHeight:rect.height,lastClientY:touch.clientY,cardEls,dragIndex,curIndex:dragIndex,rafId:null};
         card.style.transition="none";
-        card.style.opacity="0";
+        card.style.zIndex="500";
+        card.style.boxShadow="0 8px 24px rgba(0,0,0,.4)";
       },{passive:false});
+      const followFinger=()=>{
+        // Natural top = where the card sits in the flow right now, transform
+        // cleared first since the rect would otherwise include our own offset.
+        card.style.transform="none";
+        const naturalTop=card.getBoundingClientRect().top;
+        card.style.transform=`translateY(${touchDrag.lastClientY-touchDrag.grabOffsetY-naturalTop}px)`;
+      };
       handle.addEventListener("touchmove",e=>{
         if(!touchDrag)return;e.preventDefault();
-        const touch=e.touches[0];
-        touchDrag.pendingDy=touch.clientY-touchDrag.startY;
-        if(touchDrag.clone)touchDrag.clone.style.transform=`translateY(${touchDrag.pendingDy}px)`;
+        touchDrag.lastClientY=e.touches[0].clientY;
         if(touchDrag.rafId)return;
         touchDrag.rafId=requestAnimationFrame(()=>{
           touchDrag.rafId=null;
           if(!touchDrag)return;
-          const centerY=touchDrag.rectTop+touchDrag.rectHeight/2+touchDrag.pendingDy;
-          const newIndex=indexForY(touchDrag.cardEls,centerY);
+          followFinger();
+          const cardCenterY=touchDrag.lastClientY-touchDrag.grabOffsetY+touchDrag.cardHeight/2;
+          const newIndex=indexForY(touchDrag.cardEls,cardCenterY);
           if(newIndex!==touchDrag.curIndex){
             touchDrag.cardEls=flipReorder(itemsContainer,touchDrag.cardEls,touchDrag.curIndex,newIndex,card);
             touchDrag.curIndex=newIndex;
+            followFinger();
           }
         });
       },{passive:false});
       // touchend AND touchcancel both need to clean up — Android in particular can
       // cancel an in-progress touch (e.g. if it decides the gesture is a scroll or
-      // a system edge-swipe) without ever firing touchend, which — if only
-      // touchend was handled — left the floating clone stuck on screen forever
-      // (it's appended to document.body, outside any list re-render) and
-      // touchDrag stuck non-null, blocking every future drag.
+      // a system edge-swipe) without ever firing touchend.
       const finishTouchDrag=async(commit)=>{
         if(!touchDrag)return;
         if(touchDrag.rafId)cancelAnimationFrame(touchDrag.rafId);
-        if(touchDrag.clone)touchDrag.clone.remove();
-        card.style.opacity="";card.style.transition="";
+        card.style.transform="";card.style.transition="";card.style.zIndex="";card.style.boxShadow="";
         listContainer.classList.remove("dragging-active");
         const finalEls=touchDrag.cardEls;
         const changed=touchDrag.dragIndex!==touchDrag.curIndex;
