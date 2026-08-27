@@ -1813,6 +1813,10 @@ function showImportModal(parent,whId){
 
 function showSettingsModal(parent){
   showModal(parent,(m,close)=>{
+    m.style.position="relative";
+    const closeX=el("button",{style:{position:"absolute",top:"16px",left:"16px",width:"32px",height:"32px",borderRadius:"50%",border:"none",background:"transparent",color:"var(--text-sec)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"},onClick:close});
+    closeX.appendChild(icon("close",18));
+    m.appendChild(closeX);
     m.appendChild(el("h3",{style:{marginBottom:"20px"}},"הגדרות"));
     const uc=el("div",{style:{padding:"14px 16px",background:"var(--bg)",borderRadius:"12px",border:"1px solid var(--border)",marginBottom:"12px"}});
     uc.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500",marginBottom:"4px"}},"חשבון"));
@@ -1832,7 +1836,6 @@ function showSettingsModal(parent){
       currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;
       cacheClearAll();localStorage.removeItem("inv_user");close();renderAuth();
     }},"התנתק"));
-    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"12px"},onClick:close},"סגור"));
   });
 }
 
