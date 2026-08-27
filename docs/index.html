@@ -659,6 +659,7 @@ function renderListDetail(whId){
     titleEl.textContent=data.name;
     const items=data.items?Object.entries(data.items):[];
     countEl.textContent=`${items.length} פריטים`;
+    migrateLegacyItemImages(whId,items);
     // Apply default sort from warehouse settings
     if(data.sortMode&&data.sortMode!=='manual')currentSort=data.sortMode;
     renderItemsView(content,whId,items,wrap);
@@ -807,7 +808,8 @@ function renderItemsList(c,whId,items,wrap){
       if(showImgs){
         if(slotEl){
           const thumbEl=slotEl.querySelector('.item-thumb');
-          if(item.image){if(thumbEl){if(thumbEl.src!==item.image)thumbEl.src=item.image;}else{const t=el("img",{className:"item-thumb",src:item.image,onClick:()=>showImageViewer(item.image)});slotEl.appendChild(t);}}
+          const thumbSrc=item.thumb||item.image;
+          if(thumbSrc){if(thumbEl){if(thumbEl.src!==thumbSrc)thumbEl.src=thumbSrc;}else{const t=el("img",{className:"item-thumb",src:thumbSrc,onClick:async()=>showImageViewer(await fetchFullImage(whId,itemId,item))});slotEl.appendChild(t);}}
           else if(thumbEl)thumbEl.remove();
         }
       }else if(slotEl)slotEl.remove();
@@ -976,7 +978,7 @@ function renderItemsList(c,whId,items,wrap){
             item.quantity=0;
             // stay in main loop
           }else if(choice==="delete"){
-            showDeleteModal(wrap,`למחוק את "${item.name}"?`,()=>dbRemove(`warehouses/${whId}/items/${itemId}`));
+            showDeleteModal(wrap,`למחוק את "${item.name}"?`,async()=>{await dbRemove(`warehouses/${whId}/items/${itemId}`);await dbRemove(`itemImages/${whId}/${itemId}`)});
             return;
           }
         }
@@ -987,7 +989,8 @@ function renderItemsList(c,whId,items,wrap){
     // Image slot always reserved when feature on — keeps text at uniform position
     if(currentWhData?.features?.showImages!==false&&!reorderMode){
       const slot=el("div",{className:"item-img-slot"});
-      if(item.image){const t=el("img",{className:"item-thumb",src:item.image,onClick:()=>showImageViewer(item.image)});slot.appendChild(t);}
+      const thumbSrc=item.thumb||item.image;
+      if(thumbSrc){const t=el("img",{className:"item-thumb",src:thumbSrc,onClick:async()=>showImageViewer(await fetchFullImage(whId,itemId,item))});slot.appendChild(t);}
       card.append(info,slot,actions);
     }else{
       card.append(info,actions);
@@ -998,20 +1001,62 @@ function renderItemsList(c,whId,items,wrap){
 }
 
 // ═══════════ IMAGE HELPERS ═══════════
-function resizeAndEncodeImage(file,maxPx,quality,cb){
+// Full-size images are stored separately at itemImages/{whId}/{itemId} (NOT inside
+// the warehouse/items tree) so opening a warehouse only downloads small thumbnails.
+// The full image is fetched on demand only when someone actually opens the viewer.
+function encodeImageVariants(file,cb){
   const reader=new FileReader();
   reader.onload=e=>{
     const img=new Image();
     img.onload=()=>{
-      let w=img.width,h=img.height;
-      if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}
-      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      cb(canvas.toDataURL('image/jpeg',quality));
+      function toDataUrl(maxPx,quality){
+        let w=img.width,h=img.height;
+        if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}
+        const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        return canvas.toDataURL('image/jpeg',quality);
+      }
+      cb({full:toDataUrl(800,0.72),thumb:toDataUrl(160,0.55)});
     };
     img.src=e.target.result;
   };
   reader.readAsDataURL(file);
+}
+function makeThumbFromDataUrl(dataUrl,maxPx,quality,cb){
+  const img=new Image();
+  img.onload=()=>{
+    let w=img.width,h=img.height;
+    if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}
+    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+    canvas.getContext('2d').drawImage(img,0,0,w,h);
+    cb(canvas.toDataURL('image/jpeg',quality));
+  };
+  img.src=dataUrl;
+}
+// Returns the full-resolution image for viewing. Legacy items (from before this
+// change) still carry it inline as item.image; newer items keep it at itemImages/.
+async function fetchFullImage(whId,itemId,item){
+  if(item.image)return item.image;
+  const full=await dbGet(`itemImages/${whId}/${itemId}`);
+  return full||item.thumb||null;
+}
+// One-time background migration: moves any old inline item.image out to itemImages/
+// and leaves a small item.thumb behind, so the item stops being part of every
+// warehouse load. Naturally stops repeating once item.image is cleared.
+const migratingItemImages=new Set();
+async function migrateLegacyItemImages(whId,items){
+  for(const[itemId,item] of items){
+    if(!item.image||item.thumb)continue;
+    const key=whId+"/"+itemId;
+    if(migratingItemImages.has(key))continue;
+    migratingItemImages.add(key);
+    try{
+      const thumb=await new Promise(res=>makeThumbFromDataUrl(item.image,160,0.55,res));
+      await dbSet(`itemImages/${whId}/${itemId}`,item.image);
+      await dbUpdate(`warehouses/${whId}`,{[`items/${itemId}/thumb`]:thumb,[`items/${itemId}/image`]:null});
+    }catch(e){/* leave it; will retry on next load */}
+    finally{migratingItemImages.delete(key)}
+  }
 }
 
 function showImageViewer(imgData){
@@ -1129,8 +1174,11 @@ function showEditItemModal(parent,whId,itemId,item){
     m.appendChild(el("h3",{style:{marginBottom:"4px"}},"עריכת פריט"));
     m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"16px"}},item.name));
 
-    // Image row — staged locally, written to Firebase only on save
-    let pendingImage=item.image||null;
+    // Image row — staged locally, written to Firebase only on save.
+    // pendingThumb is what shows in the small preview slot; pendingFull is the new
+    // full-res photo (only set when the user actually picks a new one).
+    let pendingThumb=item.thumb||item.image||null;
+    let pendingFull=null;
     let imageChanged=false;
     const imgRow=el("div",{style:{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"}});
     const imgSlot=el("div",{style:{width:"64px",height:"64px",borderRadius:"12px",border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:"0",cursor:"pointer",color:"var(--text-muted)"}});
@@ -1140,23 +1188,24 @@ function showEditItemModal(parent,whId,itemId,item){
     const delImgBtn=el("button",{className:"btn btn-ghost btn-sm",style:{fontSize:"13px",padding:"7px 14px",color:"var(--danger)",borderColor:"rgba(255,92,92,.3)"},onClick:async()=>{
       const c=await showActionSheet([{label:"הסר תמונה",style:"danger",value:"confirm"}],"להסיר את התמונה? היא תימחק בשמירה");
       if(c!=="confirm")return;
-      pendingImage=null;imageChanged=true;refreshImgUI();
+      pendingThumb=null;pendingFull=null;imageChanged=true;refreshImgUI();
     }},"הסר");
     function refreshImgUI(){
       imgSlot.innerHTML="";
-      if(pendingImage)imgSlot.appendChild(el("img",{src:pendingImage,style:{width:"100%",height:"100%",objectFit:"cover"}}));
+      if(pendingThumb)imgSlot.appendChild(el("img",{src:pendingThumb,style:{width:"100%",height:"100%",objectFit:"cover"}}));
       else imgSlot.appendChild(icon("camera",26));
-      pickBtn.textContent=pendingImage?"החלף תמונה":"הוסף תמונה";
-      delImgBtn.style.display=pendingImage?"":"none";
+      pickBtn.textContent=pendingThumb?"החלף תמונה":"הוסף תמונה";
+      delImgBtn.style.display=pendingThumb?"":"none";
     }
-    imgSlot.addEventListener("click",()=>{
-      if(pendingImage)showImageViewer(pendingImage);
-      else fileInput.click();
+    imgSlot.addEventListener("click",async()=>{
+      if(!pendingThumb){fileInput.click();return}
+      if(imageChanged)showImageViewer(pendingFull||pendingThumb);
+      else showImageViewer(await fetchFullImage(whId,itemId,item));
     });
     fileInput.addEventListener("change",e=>{
       const file=e.target.files[0];if(!file)return;
-      resizeAndEncodeImage(file,800,0.72,data=>{
-        pendingImage=data;imageChanged=true;refreshImgUI();
+      encodeImageVariants(file,({full,thumb})=>{
+        pendingFull=full;pendingThumb=thumb;imageChanged=true;refreshImgUI();
       });
       fileInput.value="";
     });
@@ -1183,13 +1232,17 @@ function showEditItemModal(parent,whId,itemId,item){
         [`items/${itemId}/sku`]:skuInput.value.trim()||null,
         [`items/${itemId}/note`]:noteInput.value.trim()||null,
       };
-      if(imageChanged)upd[`items/${itemId}/image`]=pendingImage;
+      if(imageChanged){upd[`items/${itemId}/thumb`]=pendingThumb;upd[`items/${itemId}/image`]=null;}
       const nq=parseInt(qi.value);
       if(!isNaN(nq)&&nq>=0&&nq!==(item.quantity||0)){
         upd[`items/${itemId}/quantity`]=nq;
         upd[`items/${itemId}/history/${genId()}`]={action:"עריכה",amount:Math.abs(nq-(item.quantity||0)),result:nq,by:currentUser.displayName,date:new Date().toISOString()};
       }
       await dbUpdate(`warehouses/${whId}`,upd);
+      if(imageChanged){
+        if(pendingFull)await dbSet(`itemImages/${whId}/${itemId}`,pendingFull);
+        else await dbRemove(`itemImages/${whId}/${itemId}`);
+      }
       close();
     }},"שמור");
     btns.appendChild(sb);m.appendChild(btns);
