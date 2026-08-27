@@ -842,6 +842,17 @@ function renderItemsList(c,whId,items,wrap){
   // Full rebuild needed (items added/removed/reordered)
   listContainer.innerHTML="";
 
+  if(reorderMode){
+    const saveBar=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",background:"var(--accent-glow)",border:"1px solid rgba(79,140,255,.3)",borderRadius:"12px",padding:"10px 14px",marginBottom:"12px"}});
+    saveBar.appendChild(el("span",{style:{fontSize:"13px",color:"var(--accent)",fontWeight:"500"}},"מצב סידור ידני — גרור פריטים לסידור"));
+    const doneBtn=el("button",{className:"btn btn-primary btn-sm",onClick:()=>{
+      reorderMode=false;
+      renderItemsList(c,whId,items,wrap);
+    }},"שמור");
+    saveBar.appendChild(doneBtn);
+    listContainer.appendChild(saveBar);
+  }
+
   if(filtered.length===0&&items.length>0){
     listContainer.appendChild(el("div",{className:"empty-state",style:{padding:"30px 20px"}},
       el("p",{style:{fontSize:"14px"}},"לא נמצאו פריטים")
