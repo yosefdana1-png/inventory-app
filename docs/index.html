@@ -74,6 +74,11 @@
     .item-card{background:var(--card);border-radius:16px;padding:14px 12px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;transition:all .2s;gap:4px;overflow:hidden}
     .item-card.dragging{opacity:.5;border-color:var(--accent)}
     .item-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+    /* While a drag is in progress, kill the card's normal .2s transition so the
+       floating clone's transform (and the drag-over highlight) apply instantly
+       instead of lagging/easing behind the finger — that lag is what read as
+       "not smooth" / flickery. */
+    .dragging-active .item-card{transition:none!important}
     [data-wh-id].drag-over .list-card{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
     .icon-btn{background:none;border:none;color:var(--text-sec);cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center}
     .qty-btn{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
@@ -920,14 +925,20 @@ function renderItemsList(c,whId,items,wrap){
       // the drag feeling smooth instead of stuttering behind the finger.
       handle.addEventListener("touchstart",e=>{
         e.preventDefault();
+        listContainer.classList.add("dragging-active");
         const touch=e.touches[0];
         const rect=card.getBoundingClientRect();
         touchDrag={itemId,startY:touch.clientY,rectTop:rect.top,rectLeft:rect.left,rectWidth:rect.width,clone:null,targetId:null,lastTargetId:null,rafId:null,pendingDy:0};
         touchDrag.timer=setTimeout(()=>{
+          if(!touchDrag)return;
           const clone=card.cloneNode(true);
-          clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;will-change:transform;transform:translateY(0);`;
+          // Seed the transform with whatever offset already accumulated during the
+          // 80ms hold delay — otherwise the clone snaps to 0 first, then jumps to
+          // catch up on the next frame, which read as a stutter/flicker on grab.
+          clone.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:.85;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);border-radius:16px;will-change:transform;transition:none;transform:translateY(${touchDrag.pendingDy}px);`;
           document.body.appendChild(clone);
           touchDrag.clone=clone;
+          card.style.transition="none";
           card.style.opacity="0.3";
         },80);
       },{passive:false});
@@ -957,7 +968,8 @@ function renderItemsList(c,whId,items,wrap){
         clearTimeout(touchDrag.timer);
         if(touchDrag.rafId)cancelAnimationFrame(touchDrag.rafId);
         if(touchDrag.clone)touchDrag.clone.remove();
-        card.style.opacity="";
+        card.style.opacity="";card.style.transition="";
+        listContainer.classList.remove("dragging-active");
         listContainer.querySelectorAll(".item-card").forEach(c=>c.classList.remove("drag-over"));
         const tid=touchDrag.targetId;
         const srcId=touchDrag.itemId;
