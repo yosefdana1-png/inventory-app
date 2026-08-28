@@ -190,8 +190,10 @@ function dbListen(p,cb){const u=FB.onValue(dbRef(p),s=>cb(s.exists()?s.val():nul
 // Firebase Auth — never in the database.
 const emailForUsername=u=>`${u}@inv-user.app`;
 // Firebase requires passwords of 6+ chars; legacy accounts allowed 4-5. Pad
-// short ones deterministically so old passwords keep working unchanged.
-const authPw=p=>p.length>=6?p:p+"·".repeat(6-p.length);
+// short ones deterministically with zeros so old passwords keep working
+// unchanged ("1234" → auth password "123400"). The same padding must be used
+// when an admin pre-creates accounts in the Firebase console.
+const authPw=p=>p.length>=6?p:p+"0".repeat(6-p.length);
 // usernames/<name> → {uid,displayName} and uids/<uid> → {username} let the
 // security rules translate between the app's username keys and auth uids, and
 // give an existence check for sharing that doesn't expose user data.
@@ -383,6 +385,14 @@ function renderAuth(){
           catch(e3){fail("שם משתמש או סיסמה שגויים");return}
           try{await dbRemove(`users/${username}/password`)}catch(e4){}
         }
+        // The rules key every user-data access off usernames/<u>/uid, so the
+        // mapping must exist before the profile read on a first login.
+        await ensureIdentity(username);
+        // Sweep any plaintext password left from before Firebase Auth. Accounts
+        // pre-created by the admin sign in successfully and never hit the
+        // legacy-migration branch, so this is what removes their old password
+        // node on first login. No-op once gone.
+        dbRemove(`users/${username}/password`).catch(()=>{});
         let ud=null;
         try{ud=await dbGet(`users/${username}`)}catch(e){}
         currentUser={username,displayName:(ud&&ud.displayName)||username};
