@@ -1489,7 +1489,7 @@ function showNewListModal(parent){
       if(!inp.value.trim())return;cb.disabled=true;
       const whId=genId();
       await dbSet(`warehouses/${whId}`,{name:inp.value.trim(),owner:currentUser.username,members:{[currentUser.username]:true},createdAt:new Date().toISOString()});
-      await dbSet(`users/${currentUser.username}/warehouses/${whId}`,true);close();
+      await dbSet(`users/${currentUser.username}/warehouses/${whId}`,Date.now());close();
     }},"צור מחסן");btns.appendChild(cb);m.appendChild(btns);
     inp.addEventListener("keydown",e=>{if(e.key==="Enter")cb.click()});setTimeout(()=>inp.focus(),100);
   });
@@ -1507,11 +1507,10 @@ function showNewItemModal(parent,whId){
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const ab=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
       if(!ni.value.trim())return;ab.disabled=true;const qty=parseInt(qi.value)||0;
-      // Get max order
-      const existingItems=await dbGet(`warehouses/${whId}/items`);
-      let maxOrder=0;
-      if(existingItems)Object.values(existingItems).forEach(it=>{if((it.order||0)>maxOrder)maxOrder=it.order||0});
-      const itemData={name:ni.value.trim(),quantity:qty,order:maxOrder+1,
+      // Order = timestamp: always larger than the 1..n values manual reorder
+      // writes, so new items land at the bottom — and two devices adding at
+      // the same moment can't collide the way read-max-then-write did.
+      const itemData={name:ni.value.trim(),quantity:qty,order:Date.now(),
         history:{[genId()]:{action:"נוצר",amount:qty,by:currentUser.displayName,date:new Date().toISOString()}}};
       if(skuInput.value.trim())itemData.sku=skuInput.value.trim();
       if(noteInput.value.trim())itemData.note=noteInput.value.trim();
@@ -1787,7 +1786,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
           let tu=null;try{tu=await dbGet(`usernames/${target}`)}catch(e){}
           if(!tu){err.textContent="משתמש לא נמצא";addBtn.disabled=false;return}
           await dbSet(`warehouses/${whId}/members/${target}`,true);
-          await dbSet(`users/${target}/warehouses/${whId}`,true);
+          await dbSet(`users/${target}/warehouses/${whId}`,Date.now());
           if(!wh.members)wh.members={};wh.members[target]=true;
           inp.value='';addBtn.disabled=false;refreshMembers();
         }},"הוסף");
@@ -2033,8 +2032,11 @@ function showShareModal(parent,whId,wh){
       let tu=null;try{tu=await dbGet(`usernames/${target}`)}catch(e){}
       if(!tu){err.textContent="משתמש לא נמצא";sb.disabled=false;return}
       await dbSet(`warehouses/${whId}/members/${target}`,true);
-      await dbSet(`users/${target}/warehouses/${whId}`,true);
-      suc.textContent=`${tu.displayName||target} נוסף!`;ui.value="";sb.disabled=false;
+      await dbSet(`users/${target}/warehouses/${whId}`,Date.now());
+      // Reopen the modal so the member list actually shows the new member
+      // (it used to stay stale until the modal was closed and reopened).
+      if(!wh.members)wh.members={};wh.members[target]=true;
+      close();showShareModal(parent,whId,wh);
     }},"הוסף");btns.appendChild(sb);m.appendChild(btns);
     ui.addEventListener("keydown",e=>{if(e.key==="Enter")sb.click()});setTimeout(()=>ui.focus(),100);
   });
@@ -2081,7 +2083,7 @@ function showCopyWarehouseModal(parent,whId,wh){
       const newWh={name:wh.name,owner:target,members:{[target]:true},createdAt:new Date().toISOString()};
       if(Object.keys(newItems).length>0)newWh.items=newItems;
       await dbSet(`warehouses/${newWhId}`,newWh);
-      await dbSet(`users/${target}/warehouses/${newWhId}`,true);
+      await dbSet(`users/${target}/warehouses/${newWhId}`,Date.now());
       suc.textContent=`עותק נשלח ל-${target}!`;
       inp.value="";sendBtn.disabled=false;sendBtn.textContent="שלח";
     }},"שלח");
@@ -2234,14 +2236,12 @@ function showImportModal(parent,whId){
         if(!rows.length){err.textContent="אין פריטים תקינים";return}
         mainBtn.disabled=true;mainBtn.textContent="מייבא...";
         try{
-          const existingItems=await dbGet(`warehouses/${whId}/items`);
-          let maxOrder=0;
-          if(existingItems)Object.values(existingItems).forEach(it=>{if((it.order||0)>maxOrder)maxOrder=it.order||0});
           const updates={};
+          const base=Date.now(); // see the new-item comment: timestamp order
           rows.forEach((r,i)=>{
             const id=genId();
             const qty=r.quantity||0;
-            const itemData={name:r.name.trim(),quantity:qty,order:maxOrder+i+1,
+            const itemData={name:r.name.trim(),quantity:qty,order:base+i,
               history:{[genId()]:{action:"נוצר (ייבוא)",amount:qty,by:currentUser.displayName,date:new Date().toISOString()}}};
             if(r.sku&&r.sku.trim())itemData.sku=r.sku.trim();
             updates[`items/${id}`]=itemData;
