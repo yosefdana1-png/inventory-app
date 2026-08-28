@@ -170,6 +170,33 @@
 </div>
 
 <script>
+// ── Temporary boot-failure reporter: if anything throws before the first
+// screen renders, show it instead of the eternal loading dots. ──
+window.__bootErr=e=>{
+  try{
+    var app=document.getElementById("app");
+    if(!app||app.querySelector(".screen"))return;
+    var msg=(e&&(e.message||(e.reason&&(e.reason.message||e.reason.code))||e.type))||String(e);
+    var src=(e&&e.filename)?e.filename.split("/").pop()+":"+e.lineno:"";
+    var d=document.createElement("div");
+    d.style.cssText="padding:40px 24px;color:#ff5c5c;font-size:13px;direction:ltr;text-align:left;word-break:break-all;font-family:monospace";
+    d.textContent="BOOT ERROR: "+msg+(src?" @ "+src:"");
+    app.appendChild(d);
+  }catch(x){}
+};
+window.addEventListener("error",window.__bootErr,true);
+window.addEventListener("unhandledrejection",window.__bootErr);
+setTimeout(()=>{
+  try{
+    var app=document.getElementById("app");
+    if(app&&!app.querySelector(".screen")&&!app.querySelector("div[style*='monospace']")){
+      var d=document.createElement("div");
+      d.style.cssText="padding:40px 24px;color:#fbbf24;font-size:13px;direction:ltr;text-align:left;font-family:monospace";
+      d.textContent="BOOT STALL: no screen after 12s. FB="+(!!window.FB)+" auth="+(!!(window.FB&&window.FB.auth))+" user="+(function(){try{return !!localStorage.getItem("inv_user")}catch(e){return "ls-err"}})();
+      app.appendChild(d);
+    }
+  }catch(x){}
+},12000);
 const $=s=>document.querySelector(s);
 const el=(tag,attrs={},...ch)=>{const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs)){if(k==="style"&&typeof v==="object")Object.assign(e.style,v);else if(k.startsWith("on"))e.addEventListener(k.slice(2).toLowerCase(),v);else if(k==="className")e.className=v;else if(k==="innerHTML")e.innerHTML=v;else e.setAttribute(k,v)}for(const c of ch){if(typeof c==="string")e.appendChild(document.createTextNode(c));else if(c)e.appendChild(c)}return e};
 const icon=(name,size=20)=>{const s=document.createElementNS("http://www.w3.org/2000/svg","svg");s.setAttribute("width",size);s.setAttribute("height",size);s.innerHTML=`<use href="#icon-${name}"/>`;return s};
