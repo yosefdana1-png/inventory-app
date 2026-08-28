@@ -188,7 +188,10 @@ function dbListen(p,cb){const u=FB.onValue(dbRef(p),s=>cb(s.exists()?s.val():nul
 // The login UX stays username+password; behind the scenes each username maps to
 // a synthetic email for Firebase email/password auth. Passwords live ONLY in
 // Firebase Auth — never in the database.
-const emailForUsername=u=>`${u}@inv-user.app`;
+// ASCII usernames map directly; Hebrew/spaces/anything else is encoded to
+// lowercase base32 (case-insensitive-safe — Firebase may normalize email case).
+const b32enc=bytes=>{const A="abcdefghijklmnopqrstuvwxyz234567";let bits=0,val=0,out="";for(const b of bytes){val=(val<<8)|b;bits+=8;while(bits>=5){out+=A[(val>>>(bits-5))&31];bits-=5}}if(bits>0)out+=A[(val<<(5-bits))&31];return out};
+const emailForUsername=u=>/^[a-z0-9._-]+$/.test(u)?`${u}@inv-user.app`:`u-${b32enc(new TextEncoder().encode(u))}@inv-user.app`;
 // Firebase requires passwords of 6+ chars; legacy accounts allowed 4-5. Pad
 // short ones deterministically with zeros so old passwords keep working
 // unchanged ("1234" → auth password "123400"). The same padding must be used
@@ -349,6 +352,7 @@ function renderAuth(){
     const username=ui.value.trim().toLowerCase(),password=pi.value;
     if(!username||!password){err.textContent="יש למלא שם משתמש וסיסמה";return}
     if(username.length<2){err.textContent="שם משתמש חייב להיות לפחות 2 תווים";return}
+    if(mode==="register"&&username.length>20){err.textContent="שם משתמש יכול להכיל עד 20 תווים";return}
     if(mode==="register"&&password.length<6){err.textContent="סיסמה חייבת להיות לפחות 6 תווים";return}
     if(password.length<4){err.textContent="סיסמה חייבת להיות לפחות 4 תווים";return}
     if(!FB){err.textContent="אין חיבור — נסה שוב";return}
