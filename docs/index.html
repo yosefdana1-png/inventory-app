@@ -17,7 +17,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, set, get, remove, onValue, update }
+    import { getDatabase, ref, set, get, remove, onValue, update, increment }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
       signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential }
@@ -37,7 +37,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
-    window.FB = { db, ref, set, get, remove, onValue, update,
+    window.FB = { db, ref, set, get, remove, onValue, update, increment,
       auth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
       signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential };
     window.dispatchEvent(new Event("firebase-ready"));
@@ -719,20 +719,40 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
       }
       else if(choice==="share")showShareModal(wrap,whId,wh);
       else if(choice==="copy")showCopyWarehouseModal(wrap,whId,wh);
-      else if(choice==="delete")showDeleteModal(wrap,isOwner?`למחוק את "${wh.name}"?`:`לעזוב את "${wh.name}"?`,async()=>{
+      else if(choice==="delete"){
         // Membership must be checked BEFORE removing ourselves — the security
-        // rules only let members read a warehouse, so after self-removal the
-        // "is it empty now" check would be denied and the node never cleaned.
+        // rules only let members read a warehouse, so after self-removal every
+        // follow-up read/write here would be denied.
         let mems=null;try{mems=await dbGet(`warehouses/${whId}/members`)}catch(e){}
-        const others=mems?Object.keys(mems).filter(u=>u!==currentUser.username):[];
-        if(others.length===0){
-          await dbRemove(`warehouses/${whId}`);
-          await dbRemove(`itemImages/${whId}`).catch(()=>{});
+        const memberList=mems?Object.keys(mems):[currentUser.username];
+        const others=memberList.filter(u=>u!==currentUser.username);
+        if(isOwner&&others.length>0){
+          // An owner "deleting" a shared warehouse used to silently just LEAVE,
+          // stranding an ownerless warehouse for everyone else. Now it really
+          // deletes — for all members — after an explicit warning.
+          showDeleteModal(wrap,`"${wh.name}" משותף עם עוד ${others.length} חברים. המחיקה תסיר אותו לכולם והיא בלתי הפיכה. (רוצה רק לצאת? העבר קודם בעלות דרך "שיתוף וניהול חברים")`,async()=>{
+            // Order matters under the rules: images and member links are only
+            // writable while the warehouse (and our membership) still exist,
+            // so the warehouse node itself goes LAST.
+            await dbRemove(`itemImages/${whId}`).catch(()=>{});
+            for(const u of others)await dbRemove(`users/${u}/warehouses/${whId}`).catch(()=>{});
+            await dbRemove(`warehouses/${whId}`);
+            await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+          });
         }else{
-          await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+          showDeleteModal(wrap,isOwner?`למחוק את "${wh.name}"?`:`לעזוב את "${wh.name}"?`,async()=>{
+            if(others.length===0){
+              // Sole member: full cleanup. Images BEFORE the warehouse node —
+              // once the node is gone the rules no longer see our membership.
+              await dbRemove(`itemImages/${whId}`).catch(()=>{});
+              await dbRemove(`warehouses/${whId}`);
+            }else{
+              await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+            }
+            await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+          });
         }
-        await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
-      });
+      }
     }});
     moreBtn.appendChild(icon("more",18));
     const arrow=icon("forward",18);arrow.style.color="var(--text-muted)";
@@ -1410,12 +1430,14 @@ async function fetchFullImage(whId,itemId,item){
 const migratingItemImages=new Set();
 async function migrateLegacyItemImages(whId,items){
   for(const[itemId,item] of items){
-    if(!item.image||item.thumb)continue;
+    // Any inline image gets moved out — including copied items that already
+    // arrive with a thumb (their existing thumb is reused as-is).
+    if(!item.image)continue;
     const key=whId+"/"+itemId;
     if(migratingItemImages.has(key))continue;
     migratingItemImages.add(key);
     try{
-      const thumb=await new Promise(res=>makeThumbFromDataUrl(item.image,160,0.55,res));
+      const thumb=item.thumb||await new Promise(res=>makeThumbFromDataUrl(item.image,160,0.55,res));
       await dbSet(`itemImages/${whId}/${itemId}`,item.image);
       await dbUpdate(`warehouses/${whId}`,{[`items/${itemId}/thumb`]:thumb,[`items/${itemId}/image`]:null});
     }catch(e){/* leave it; will retry on next load */}
@@ -1519,12 +1541,20 @@ function showAdjustModal(parent,whId,itemId,item,mode){
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const ab=el("button",{className:`btn ${cm==="add"?"btn-success":"btn-danger"}`,style:{flex:"1"},onClick:async()=>{
       const a=parseInt(qi.value);if(!a||a<=0)return;ab.disabled=true;
-      // Read fresh quantity from Firebase
+      // Atomic adjust: quantity is written as a server-side increment, and the
+      // history entry rides in the SAME update — two users adjusting at once
+      // can no longer overwrite each other (the old read-then-set flow could).
+      // The fresh read only clamps removals at zero and estimates the result
+      // for the history line.
       const freshItem=await dbGet(`warehouses/${whId}/items/${itemId}`);
       const c=freshItem?freshItem.quantity||0:item.quantity||0;
-      const nq=cm==="add"?c+a:Math.max(0,c-a);
-      await dbSet(`warehouses/${whId}/items/${itemId}/quantity`,nq);
-      await dbSet(`warehouses/${whId}/items/${itemId}/history/${genId()}`,{action:cm==="add"?"הוספה":"הורדה",amount:a,result:nq,by:currentUser.displayName,date:new Date().toISOString()});
+      const delta=cm==="add"?a:-Math.min(a,c);
+      if(delta===0){close();return}
+      const nq=Math.max(0,c+delta);
+      await dbUpdate(`warehouses/${whId}`,{
+        [`items/${itemId}/quantity`]:FB.increment(delta),
+        [`items/${itemId}/history/${genId()}`]:{action:cm==="add"?"הוספה":"הורדה",amount:Math.abs(delta),result:nq,by:currentUser.displayName,date:new Date().toISOString()}
+      });
       close();
     }},cm==="add"?"הוסף":"הורד");btns.appendChild(ab);m.appendChild(btns);
     qi.addEventListener("keydown",e=>{if(e.key==="Enter")ab.click()});setTimeout(()=>qi.focus(),100);
@@ -2026,23 +2056,34 @@ function showCopyWarehouseModal(parent,whId,wh){
       sendBtn.disabled=true;err.textContent="";suc.textContent="";
       let tu=null;try{tu=await dbGet(`usernames/${target}`)}catch(e){}
       if(!tu){err.textContent="משתמש לא נמצא";sendBtn.disabled=false;return}
+      sendBtn.textContent="שולח...";
       const newWhId=genId();
       const newItems={};
       if(wh.items){
-        Object.values(wh.items).forEach(item=>{
+        for(const[oldId,item]of Object.entries(wh.items)){
           const newId=genId();
           const ni={name:item.name,quantity:item.quantity||0,order:item.order||0,
             history:{[genId()]:{action:"יובא",amount:item.quantity||0,by:currentUser.displayName,date:new Date().toISOString()}}};
           if(item.note)ni.note=item.note;
+          if(item.sku)ni.sku=item.sku;
+          if(item.thumb)ni.thumb=item.thumb;
+          // The full-res image rides along INLINE (the legacy image field): the
+          // rules don't let the sender write into the recipient's itemImages/,
+          // but the recipient's own app migrates inline images out to
+          // itemImages/ automatically the first time they open the warehouse.
+          try{
+            const full=item.image||await dbGet(`itemImages/${whId}/${oldId}`);
+            if(full)ni.image=full;
+          }catch(e){}
           newItems[newId]=ni;
-        });
+        }
       }
       const newWh={name:wh.name,owner:target,members:{[target]:true},createdAt:new Date().toISOString()};
       if(Object.keys(newItems).length>0)newWh.items=newItems;
       await dbSet(`warehouses/${newWhId}`,newWh);
       await dbSet(`users/${target}/warehouses/${newWhId}`,true);
       suc.textContent=`עותק נשלח ל-${target}!`;
-      inp.value="";sendBtn.disabled=false;
+      inp.value="";sendBtn.disabled=false;sendBtn.textContent="שלח";
     }},"שלח");
     btns.appendChild(sendBtn);m.appendChild(btns);
     inp.addEventListener("keydown",e=>{if(e.key==="Enter")sendBtn.click()});
