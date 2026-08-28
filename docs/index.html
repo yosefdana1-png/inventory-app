@@ -481,6 +481,8 @@ let currentWhIds=[];
 let whCardListeners=[];
 
 function renderWarehouseList(c,whIds,wrap){
+  // Never rebuild the list under an active drag — defer to finishWhTouchDrag.
+  if(whTouchDrag){pendingWhRender=true;return}
   const same=currentWhIds.length===whIds.length&&currentWhIds.every((id,i)=>id===whIds[i]);
   const cardsExist=c.querySelector('#warehouseCards');
 
@@ -689,8 +691,14 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
         lastHomeWhIds=newOrder;
         currentWhIds=[];
         if(cachedHomeContent&&homeScreen)renderWarehouseList(cachedHomeContent,lastHomeWhIds,homeScreen);
+        pendingWhRender=false;
         const upd={};newOrder.forEach((id,i)=>{upd[id]=i+1});
         await dbUpdate(`users/${currentUser.username}/warehouses`,upd);
+      }else if(pendingWhRender){
+        // A data update arrived mid-drag and was deferred — apply it now.
+        pendingWhRender=false;
+        currentWhIds=[];
+        if(cachedHomeContent&&homeScreen)renderWarehouseList(cachedHomeContent,lastHomeWhIds,homeScreen);
       }
     };
     handle.addEventListener("touchend",()=>finishWhTouchDrag(true));
@@ -748,6 +756,8 @@ let desktopDrag=null;
 let whReorderMode=false;
 let whDragSrcId=null;
 let whTouchDrag=null;
+let pendingListRender=false; // a list re-render deferred because a touch drag was active
+let pendingWhRender=false;   // same, for the home warehouse list
 let lastHomeWhIds=[];
 let userWarehouseRole='member';
 let currentWhData=null;
@@ -862,6 +872,11 @@ function renderItemsView(c,whId,items,wrap){
       if(!choice)return;
       if(choice==="reorder"){
         reorderMode=!reorderMode;currentSort="manual";
+        // Search and manual reorder don't mix: dragging a FILTERED list would
+        // renumber only the visible subset (1..k) and collide with everyone
+        // else's order values. Clear the query on entry; the box is disabled
+        // for the duration of reorder mode (see renderItemsList).
+        if(reorderMode){searchQuery="";const si=wrap.querySelector('#searchInput');if(si)si.value="";const cb=wrap.querySelector('#searchClear');if(cb)cb.style.display="none"}
         renderItemsList(c,currentWhId,currentItems,wrap);
       }else{
         const sorted=[...currentItems].sort((a,b)=>{
@@ -995,6 +1010,17 @@ function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
 function renderItemsList(c,whId,items,wrap){
   const listContainer=c.querySelector('#itemsList');
   if(!listContainer)return;
+
+  // A re-render arriving MID-DRAG (another user's update coming through the
+  // listener) would replace the cards under the user's finger and break the
+  // gesture — defer it; finishTouchDrag re-renders with the fresh data.
+  if(touchDrag){pendingListRender=true;return}
+  // Search is disabled while reordering (see the sort action sheet comment).
+  const searchInputEl=wrap.querySelector('#searchInput');
+  if(searchInputEl){
+    searchInputEl.disabled=reorderMode;
+    searchInputEl.placeholder=reorderMode?"החיפוש כבוי בזמן סידור ידני":"חיפוש פריט...";
+  }
 
   let filtered=items;
   if(searchQuery.trim()){
@@ -1249,10 +1275,15 @@ function renderItemsList(c,whId,items,wrap){
           // rendering before the (async) DB write is what prevents a visible
           // snap-back to the old order while the write is in flight.
           finalEls.forEach((elm,i)=>{
-            const entry=items.find(([id])=>id===elm.dataset.itemId);
+            const id=elm.dataset.itemId;
+            const entry=items.find(([eid])=>eid===id);
             if(entry)entry[1].order=i+1;
+            // If a fresher items array arrived mid-drag, mirror the order there
+            // too so the deferred re-render below agrees with the drop.
+            if(currentItems!==items){const ce=currentItems.find(([eid])=>eid===id);if(ce)ce[1].order=i+1;}
           });
-          renderItemsList(c,whId,items,wrap);
+          renderItemsList(c,whId,pendingListRender?currentItems:items,wrap);
+          pendingListRender=false;
           const updates={};
           finalEls.forEach((elm,i)=>{updates[`items/${elm.dataset.itemId}/order`]=i+1});
           // Without this, a warehouse whose default sort is alpha/qty re-sorts
@@ -1262,7 +1293,8 @@ function renderItemsList(c,whId,items,wrap){
           if(currentWhData)currentWhData.sortMode="manual";
           await dbUpdate(`warehouses/${whId}`,updates);
         }else{
-          renderItemsList(c,whId,items,wrap);
+          renderItemsList(c,whId,pendingListRender?currentItems:items,wrap);
+          pendingListRender=false;
         }
       };
       handle.addEventListener("touchend",()=>finishTouchDrag(true));
@@ -2314,6 +2346,9 @@ function endSwipe(completed){
 }
 
 document.addEventListener('touchstart',e=>{
+  // In RTL the item drag handles sit on the right — exactly in the 30px strip
+  // that arms the swipe-back gesture. A drag must never double as a swipe.
+  if(e.target&&e.target.closest&&e.target.closest('.drag-handle'))return;
   if(!canSwipeBack())return;
   const x=e.touches[0].clientX;
   if(x<window.innerWidth-30)return;
