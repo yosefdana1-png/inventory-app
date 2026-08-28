@@ -16,31 +16,53 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js">
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, set, get, remove, onValue, update, increment }
-      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-      signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential }
-      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    // Firebase bootstrap. Loaded step-by-step with dynamic imports inside a
+    // try/catch: a failure inside the (cross-origin) Firebase files surfaces
+    // here with its REAL message instead of a masked "Script error.".
+    (async()=>{
+      let step="app";
+      try{
+        const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+        step="database";
+        const { getDatabase, ref, set, get, remove, onValue, update, increment } =
+          await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+        step="auth-import";
+        const { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+          signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } =
+          await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyB01z8Qw-wxnVuHnOEiHdhrtCo_SEUKn5U",
-      authDomain: "inventory-app-d539d.firebaseapp.com",
-      databaseURL: "https://inventory-app-d539d-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "inventory-app-d539d",
-      storageBucket: "inventory-app-d539d.firebasestorage.app",
-      messagingSenderId: "899869135121",
-      appId: "1:899869135121:web:5fb545824beb12c1e4fcb0",
-      measurementId: "G-SLNNE6F1LN"
-    };
+        const firebaseConfig = {
+          apiKey: "AIzaSyB01z8Qw-wxnVuHnOEiHdhrtCo_SEUKn5U",
+          authDomain: "inventory-app-d539d.firebaseapp.com",
+          databaseURL: "https://inventory-app-d539d-default-rtdb.europe-west1.firebasedatabase.app",
+          projectId: "inventory-app-d539d",
+          storageBucket: "inventory-app-d539d.firebasestorage.app",
+          messagingSenderId: "899869135121",
+          appId: "1:899869135121:web:5fb545824beb12c1e4fcb0",
+          measurementId: "G-SLNNE6F1LN"
+        };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const auth = getAuth(app);
-    window.FB = { db, ref, set, get, remove, onValue, update, increment,
-      auth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-      signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential };
-    window.dispatchEvent(new Event("firebase-ready"));
+        step="initializeApp";
+        const app = initializeApp(firebaseConfig);
+        step="getDatabase";
+        const db = getDatabase(app);
+        step="getAuth";
+        // initializeAuth with an explicit persistence list — getAuth()'s default
+        // popup/redirect resolver can throw inside a Capacitor WKWebView.
+        let auth;
+        try{
+          auth = initializeAuth(app,{persistence:[indexedDBLocalPersistence,browserLocalPersistence,inMemoryPersistence]});
+        }catch(e){
+          auth = getAuth(app);
+        }
+        window.FB = { db, ref, set, get, remove, onValue, update, increment,
+          auth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+          signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential };
+        window.dispatchEvent(new Event("firebase-ready"));
+      }catch(e){
+        if(window.__bootErr)window.__bootErr({message:"FB@"+step+": "+((e&&(e.message||e.code))||String(e))});
+      }
+    })();
   </script>
 
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
