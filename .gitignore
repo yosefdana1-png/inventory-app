@@ -11,3 +11,8 @@ android/app/build/
 android/build/
 android/local.properties
 .gradle/
+
+# Android release signing — NEVER commit these
+*.jks
+*.keystore
+android/keystore.properties
