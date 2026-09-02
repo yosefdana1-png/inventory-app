@@ -558,17 +558,79 @@ function sortedWhIds(data){
 // Category chips on the home screen. Categories are personal (stored under the
 // user's own node), so everyone organizes THEIR list without affecting others.
 // Chips derive from categories actually assigned to current warehouses.
+function currentCats(){
+  return [...new Set(lastHomeWhIds.map(id=>whCategories[id]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"he"));
+}
+function showCategoryNameModal(whId,initial){
+  if(!homeScreen)return;
+  showModal(homeScreen,(m,close)=>{
+    m.appendChild(el("h3",{style:{marginBottom:"16px"}},initial?"שינוי שם קטגוריה":"קטגוריה חדשה"));
+    const inp=el("input",{className:"app-input",placeholder:'שם הקטגוריה (למשל: "בית")'});
+    if(initial)inp.value=initial;
+    m.appendChild(inp);
+    const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
+    btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
+    const ok=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
+      const name=inp.value.trim();if(!name||name===initial)return;ok.disabled=true;
+      if(initial){
+        // Rename everywhere the old name is used (and keep the filter on it).
+        const upd={};
+        Object.entries(whCategories).forEach(([id,v])=>{if(v===initial)upd[id]=name});
+        await dbUpdate(`users/${currentUser.username}/whCategories`,upd);
+        if(catFilter===initial)catFilter=name;
+      }else{
+        await dbSet(`users/${currentUser.username}/whCategories/${whId}`,name);
+      }
+      close();
+    }},"שמור");
+    btns.appendChild(ok);m.appendChild(btns);
+    inp.addEventListener("keydown",e=>{if(e.key==="Enter")ok.click()});
+    setTimeout(()=>{inp.focus();if(initial)inp.select()},100);
+  });
+}
+async function startAddCategory(){
+  if(!lastHomeWhIds.length){showNotice("צור מחסן קודם");return}
+  const opts=lastHomeWhIds.map(id=>{
+    const w=cacheGet(`warehouses/${id}`);
+    return {label:(w&&w.name)||"מחסן",value:id};
+  });
+  const whId=await showActionSheet(opts,"לאיזה מחסן לשייך את הקטגוריה?");
+  if(whId)showCategoryNameModal(whId,null);
+}
+async function manageCategoriesSheet(){
+  const cats=currentCats();
+  const cat=await showActionSheet(cats.map(x=>({label:x,value:x})),"בחר קטגוריה לעריכה");
+  if(!cat)return;
+  const act=await showActionSheet([
+    {label:"שנה שם",value:"rename"},
+    {label:"מחק קטגוריה (המחסנים נשארים)",style:"danger",value:"del"},
+  ],`"${cat}"`);
+  if(act==="rename")showCategoryNameModal(null,cat);
+  else if(act==="del"){
+    const upd={};
+    Object.entries(whCategories).forEach(([id,v])=>{if(v===cat)upd[id]=null});
+    await dbUpdate(`users/${currentUser.username}/whCategories`,upd);
+    if(catFilter===cat)catFilter=null;
+  }
+}
 function renderCatChips(){
   const c=cachedHomeContent;if(!c)return;
   let bar=c.querySelector('#catChips');
-  const cats=[...new Set(lastHomeWhIds.map(id=>whCategories[id]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"he"));
-  if(!cats.length){if(bar)bar.remove();catFilter=null;return}
-  if(catFilter&&!cats.includes(catFilter))catFilter=null;
+  const cats=currentCats();
   if(!bar){bar=el("div",{id:"catChips",style:{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"12px"}});c.insertBefore(bar,c.firstChild)}
   bar.innerHTML="";
+  if(!cats.length){
+    catFilter=null;
+    if(lastHomeWhIds.length)bar.appendChild(el("button",{className:"toolbar-btn",onClick:startAddCategory},"+ הוסף קטגוריה"));
+    return;
+  }
+  if(catFilter&&!cats.includes(catFilter))catFilter=null;
   const mk=(label,val)=>el("button",{className:"toolbar-btn"+((catFilter===val)?" active":""),onClick:()=>{catFilter=val;renderCatChips();applyCatFilter()}},label);
   bar.appendChild(mk("הכל",null));
   cats.forEach(cat=>bar.appendChild(mk(cat,cat)));
+  const editChip=el("button",{className:"toolbar-btn",title:"עריכת קטגוריות",onClick:manageCategoriesSheet});
+  editChip.appendChild(icon("edit",13));
+  bar.appendChild(editChip);
 }
 function applyCatFilter(){
   const cont=document.getElementById('warehouseCards');if(!cont)return;
@@ -939,20 +1001,7 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
         const c2=await showActionSheet(opts,`קטגוריה עבור "${wh.name}" (אישי — רק אצלך)`);
         if(!c2)return;
         if(c2==="new"){
-          showModal(wrap,(m,close)=>{
-            m.appendChild(el("h3",{style:{marginBottom:"16px"}},"קטגוריה חדשה"));
-            const inp=el("input",{className:"app-input",placeholder:'שם הקטגוריה (למשל: "בית")'});m.appendChild(inp);
-            const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
-            btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
-            const ok=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
-              const name=inp.value.trim();if(!name)return;ok.disabled=true;
-              await dbSet(`users/${currentUser.username}/whCategories/${whId}`,name);
-              close();
-            }},"שמור");
-            btns.appendChild(ok);m.appendChild(btns);
-            inp.addEventListener("keydown",e=>{if(e.key==="Enter")ok.click()});
-            setTimeout(()=>inp.focus(),100);
-          });
+          showCategoryNameModal(whId,null);
         }else if(c2==="clear"){
           await dbRemove(`users/${currentUser.username}/whCategories/${whId}`);
         }else if(c2.indexOf("set:")===0){
