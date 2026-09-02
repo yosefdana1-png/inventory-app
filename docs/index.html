@@ -2248,21 +2248,57 @@ function showImportModal(parent,whId){
 
     let mode="edit";
     let parsedRows=[];
+    let updMode="replace"; // what to do with quantities of EXISTING items: replace | add
+    const byName=new Map(); // normalized item name -> existing item id (this warehouse)
+
+    const matchCounts=()=>{
+      const rows=parsedRows.filter(r=>r.name&&r.name.trim());
+      const upd=rows.filter(r=>r.existingId).length;
+      return {upd,neu:rows.length-upd};
+    };
+    const refreshMainLabel=()=>{
+      const{upd,neu}=matchCounts();
+      mainBtn.textContent=upd?`ייבא: ${neu} חדשים, ${upd} עדכונים`:`ייבא ${neu} פריטים`;
+    };
 
     function renderPreview(){
       previewWrap.innerHTML="";
+      // Imported names are matched against the warehouse's existing items —
+      // matches UPDATE the item instead of creating a duplicate.
+      const{upd}=matchCounts();
+      if(upd>0){
+        const bar=el("div",{style:{marginBottom:"10px"}});
+        bar.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-sec)",marginBottom:"6px"}},"פריטים קיימים — מה לעשות עם הכמות?"));
+        const opts=el("div",{style:{display:"flex",gap:"6px"}});
+        const mk=(val,label)=>el("button",{className:"toolbar-btn"+(updMode===val?" active":""),onClick:()=>{updMode=val;renderPreview()}},label);
+        opts.append(mk("replace","עדכן לכמות שבייבוא"),mk("add","הוסף לכמות הקיימת"));
+        bar.appendChild(opts);
+        previewWrap.appendChild(bar);
+      }
       parsedRows.forEach((row,idx)=>{
         const rowEl=el("div",{style:{display:"flex",gap:"6px",marginBottom:"6px",alignItems:"center"}});
+        const badge=el("span",{style:{fontSize:"10px",padding:"3px 8px",borderRadius:"8px",flexShrink:"0",fontWeight:"600",whiteSpace:"nowrap"}});
+        const paintBadge=()=>{
+          if(row.existingId){badge.textContent="עדכון";badge.style.background="var(--warning-bg)";badge.style.color="var(--warning)";badge.style.border="1px solid rgba(251,191,36,.3)"}
+          else{badge.textContent="חדש";badge.style.background="var(--success-bg)";badge.style.color="var(--success)";badge.style.border="1px solid rgba(52,211,153,.2)"}
+        };
+        paintBadge();
         const nameI=el("input",{className:"app-input",style:{flex:"3",padding:"8px 10px",fontSize:"13px"}});
         nameI.value=row.name;
-        nameI.addEventListener("input",()=>{row.name=nameI.value});
+        nameI.addEventListener("input",()=>{
+          row.name=nameI.value;
+          // Re-match live: editing a name in the preview can turn an update
+          // into a new item and vice versa.
+          const ex=byName.get(row.name.trim().toLowerCase())||null;
+          if(ex!==row.existingId){row.existingId=ex;paintBadge();refreshMainLabel()}
+        });
         const qtyI=el("input",{className:"app-input",type:"number",inputMode:"numeric",style:{flex:"1",padding:"8px 10px",fontSize:"13px"}});
         qtyI.value=row.quantity;
         qtyI.addEventListener("input",()=>{row.quantity=parseInt(qtyI.value)||0});
         const rmBtn=el("button",{className:"toolbar-btn danger-hover",style:{padding:"6px",flex:"0 0 auto"}});
         rmBtn.appendChild(icon("close",12));
-        rmBtn.onclick=()=>{parsedRows.splice(idx,1);renderPreview();mainBtn.textContent=`ייבא ${parsedRows.length} פריטים`};
-        rowEl.append(nameI,qtyI,rmBtn);
+        rmBtn.onclick=()=>{parsedRows.splice(idx,1);renderPreview();refreshMainLabel()};
+        rowEl.append(badge,nameI,qtyI,rmBtn);
         previewWrap.appendChild(rowEl);
       });
     }
@@ -2275,11 +2311,17 @@ function showImportModal(parent,whId){
       if(mode==="edit"){
         parsedRows=parseImportText(ta.value);
         if(!parsedRows.length){err.textContent="לא נמצאו פריטים לייבוא";return}
+        byName.clear();
+        currentItems.forEach(([id,item])=>{
+          const k=(item.name||"").trim().toLowerCase();
+          if(k&&!byName.has(k))byName.set(k,id);
+        });
+        parsedRows.forEach(r=>{r.existingId=byName.get(r.name.trim().toLowerCase())||null});
         renderPreview();
         mode="preview";
         ta.style.display="none";fileRow.style.display="none";
         previewWrap.style.display="";
-        mainBtn.textContent=`ייבא ${parsedRows.length} פריטים`;
+        refreshMainLabel();
       }else{
         const rows=parsedRows.filter(r=>r.name&&r.name.trim());
         if(!rows.length){err.textContent="אין פריטים תקינים";return}
@@ -2287,17 +2329,35 @@ function showImportModal(parent,whId){
         try{
           const updates={};
           const base=Date.now(); // see the new-item comment: timestamp order
-          rows.forEach((r,i)=>{
-            const id=genId();
+          let newCount=0;
+          rows.forEach(r=>{
             const qty=r.quantity||0;
-            const itemData={name:r.name.trim(),quantity:qty,order:base+i,
-              history:{[genId()]:{action:"נוצר (ייבוא)",amount:qty,by:currentUser.displayName,date:new Date().toISOString()}}};
-            if(r.sku&&r.sku.trim())itemData.sku=r.sku.trim();
-            updates[`items/${id}`]=itemData;
+            if(r.existingId){
+              const id=r.existingId;
+              const entry=currentItems.find(([eid])=>eid===id);
+              const curQ=entry?(entry[1].quantity||0):0;
+              if(r.sku&&r.sku.trim())updates[`items/${id}/sku`]=r.sku.trim();
+              if(updMode==="add"){
+                if(qty>0){
+                  updates[`items/${id}/quantity`]=FB.increment(qty);
+                  updates[`items/${id}/history/${genId()}`]={action:"הוספה (ייבוא)",amount:qty,result:curQ+qty,by:currentUser.displayName,date:new Date().toISOString()};
+                }
+              }else if(qty!==curQ){
+                updates[`items/${id}/quantity`]=qty;
+                updates[`items/${id}/history/${genId()}`]={action:"עדכון (ייבוא)",amount:Math.abs(qty-curQ),result:qty,by:currentUser.displayName,date:new Date().toISOString()};
+              }
+            }else{
+              const id=genId();
+              const itemData={name:r.name.trim(),quantity:qty,order:base+(newCount++),
+                history:{[genId()]:{action:"נוצר (ייבוא)",amount:qty,by:currentUser.displayName,date:new Date().toISOString()}}};
+              if(r.sku&&r.sku.trim())itemData.sku=r.sku.trim();
+              updates[`items/${id}`]=itemData;
+            }
           });
+          if(Object.keys(updates).length===0){close();return}
           await dbUpdate(`warehouses/${whId}`,updates);
           close();
-        }catch(e){err.textContent="שגיאה בייבוא — נסה שוב";mainBtn.disabled=false;mainBtn.textContent=`ייבא ${rows.length} פריטים`}
+        }catch(e){err.textContent="שגיאה בייבוא — נסה שוב";mainBtn.disabled=false;refreshMainLabel()}
       }
     };
     btns.append(cancelBtn,mainBtn);m.appendChild(btns);
