@@ -850,11 +850,54 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
         menuOpts.push({label:"שיתוף וניהול חברים",value:"share"});
         menuOpts.push({label:"שלח עותק למשתמש",value:"copy"});
       }
+      menuOpts.push({label:"שכפל מחסן",value:"duplicate"});
       menuOpts.push({label:isOwner?"מחק מחסן":"עזוב מחסן",style:"danger",value:"delete"});
       const choice=await showActionSheet(menuOpts);
       if(choice==="export"){
         const items=await dbGet(`warehouses/${whId}/items`);
         showExportModal(wrap,whId,Object.entries(items||{}));
+      }
+      else if(choice==="duplicate"){
+        // Duplicate FOR MYSELF (unlike "send copy" which targets another user):
+        // a fresh private warehouse with all items, thumbs, thresholds and the
+        // display/sort settings — no members, no invite token, fresh history.
+        const c2=await showActionSheet([{label:`שכפל את "${wh.name}" למחסן חדש`,value:"ok"}]);
+        if(c2!=="ok")return;
+        try{
+          const newWhId=genId();
+          const idMap={};
+          const newItems={};
+          if(wh.items){
+            for(const[oldId,item]of Object.entries(wh.items)){
+              const newId=genId();idMap[oldId]=newId;
+              const ni={name:item.name,quantity:item.quantity||0,order:item.order||0,
+                history:{[genId()]:{action:"שוכפל",amount:item.quantity||0,by:currentUser.displayName,date:new Date().toISOString()}}};
+              if(item.note)ni.note=item.note;
+              if(item.sku)ni.sku=item.sku;
+              if(item.thumb)ni.thumb=item.thumb;
+              if(item.lowStock)ni.lowStock=item.lowStock;
+              if(item.image)ni.image=item.image;
+              newItems[newId]=ni;
+            }
+          }
+          const newWh={name:`${wh.name} (עותק)`,owner:currentUser.username,members:{[currentUser.username]:true},createdAt:new Date().toISOString()};
+          if(wh.sortMode)newWh.sortMode=wh.sortMode;
+          if(wh.features)newWh.features=JSON.parse(JSON.stringify(wh.features));
+          if(Object.keys(newItems).length)newWh.items=newItems;
+          await dbSet(`warehouses/${newWhId}`,newWh);
+          // Full-size images live outside the warehouse node — copy them
+          // directly (allowed: we're a member of the new warehouse by now).
+          try{
+            const imgs=await dbGet(`itemImages/${whId}`);
+            if(imgs){
+              const newImgs={};
+              for(const[oldId,img]of Object.entries(imgs)){if(idMap[oldId])newImgs[idMap[oldId]]=img}
+              if(Object.keys(newImgs).length)await dbSet(`itemImages/${newWhId}`,newImgs);
+            }
+          }catch(e){}
+          await dbSet(`users/${currentUser.username}/warehouses/${newWhId}`,Date.now());
+          showNotice(`נוצר עותק: "${newWh.name}"`);
+        }catch(e){showNotice("שגיאה בשכפול — נסה שוב")}
       }
       else if(choice==="share")showShareModal(wrap,whId,wh);
       else if(choice==="copy")showCopyWarehouseModal(wrap,whId,wh);
