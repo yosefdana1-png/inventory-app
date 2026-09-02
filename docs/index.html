@@ -1966,6 +1966,22 @@ function showWarehouseSettingsModal(parent,whId,wh){
     function refreshMembers(){
       mp.innerHTML='';
       const members=wh.members?Object.keys(wh.members):[];
+      // Join-QR access from settings — straight to the fullscreen view.
+      const addQrBtn=()=>{
+        if(!(isAdmin||!(wh.permissions&&wh.permissions.restrict_share)))return;
+        const qb=el("button",{className:"btn btn-ghost",style:{width:"100%",margin:"10px 0 2px"},onClick:async()=>{
+          qb.disabled=true;
+          try{
+            let token=wh.inviteToken;
+            if(!token){token=genId()+genId();await dbSet(`warehouses/${whId}/inviteToken`,token);wh.inviteToken=token}
+            await loadQRLib();
+            showQRViewer(`${APP_URL}#join=${whId}.${token}`);
+          }catch(e){showNotice("שגיאה בטעינת הקוד — נסה שוב")}
+          qb.disabled=false;
+        }},"קוד QR להצטרפות");
+        mp.appendChild(qb);
+      };
+      if(!isAdmin)addQrBtn();
       if(isAdmin){
         const addRow=el("div",{style:{display:"flex",gap:"8px"}});
         const inp=el("input",{className:"app-input",placeholder:"שם משתמש להוספה",style:{flex:"1"},autocapitalize:"off"});
@@ -1985,6 +2001,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
         addRow.append(inp,addBtn);
         mp.appendChild(addRow);mp.appendChild(err);
         inp.addEventListener("keydown",e=>{if(e.key==="Enter")addBtn.click()});
+        addQrBtn();
         mp.appendChild(el("div",{style:{borderTop:"1px solid var(--border)",margin:"12px 0 10px"}}));
       }
       members.forEach(u=>{
@@ -2059,20 +2076,6 @@ function showWarehouseSettingsModal(parent,whId,wh){
         row.appendChild(acts);
         mp.appendChild(row);
       });
-      // Join-QR access from settings too — straight to the fullscreen view.
-      if(isAdmin||!(wh.permissions&&wh.permissions.restrict_share)){
-        const qb=el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"12px"},onClick:async()=>{
-          qb.disabled=true;
-          try{
-            let token=wh.inviteToken;
-            if(!token){token=genId()+genId();await dbSet(`warehouses/${whId}/inviteToken`,token);wh.inviteToken=token}
-            await loadQRLib();
-            showQRViewer(`${APP_URL}#join=${whId}.${token}`);
-          }catch(e){showNotice("שגיאה בטעינת הקוד — נסה שוב")}
-          qb.disabled=false;
-        }},"קוד QR להצטרפות");
-        mp.appendChild(qb);
-      }
     }
     refreshMembers();
 
