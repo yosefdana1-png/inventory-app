@@ -1442,10 +1442,9 @@ function renderItemsList(c,whId,items,wrap){
       const sb=el("button",{className:"qty-btn qty-btn-sub",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"remove")});sb.appendChild(icon("minus",18));
       const ab=el("button",{className:"qty-btn qty-btn-add",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"add")});ab.appendChild(icon("plus",18));
       const mb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:async()=>{
-        // Main menu loop — inline actions keep it open.
         // Cards update in place without rebuilding, so the closure's `item` can be
         // stale (e.g. built from image-stripped cache) — refresh from currentItems.
-        while(true){
+        {
           const fresh=currentItems.find(([id])=>id===itemId);
           if(fresh)item=fresh[1];
           const mainOpts=[];
@@ -1473,7 +1472,7 @@ function renderItemsList(c,whId,items,wrap){
                 [`items/${itemId}/history/${genId()}`]:{action:"שחזור",amount:prevQ,result:prevQ,by:currentUser.displayName,date:new Date().toISOString()}
               });
             });
-            // stay in main loop
+            // menu closes — the undo toast is now the follow-up UI
           }else if(choice==="delete"){
             showDeleteModal(wrap,`למחוק את "${item.name}"?`,async()=>{
               // Snapshot BEFORE deleting (including the full-size image, which
