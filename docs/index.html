@@ -156,7 +156,7 @@
     .undo-toast{position:fixed;bottom:calc(104px + env(safe-area-inset-bottom));left:16px;right:16px;z-index:4000;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px 12px 12px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,.55);animation:fadeIn .2s ease}
     .undo-btn{background:var(--accent-glow);border:1px solid rgba(79,140,255,.3);color:var(--accent);border-radius:10px;padding:8px 18px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0}
     .item-img-slot{width:56px;height:56px;flex-shrink:0;margin-right:10px;border-radius:10px}
-    .item-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;cursor:pointer;border:1px solid var(--border);display:block}
+    .item-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;cursor:pointer;border:1px solid var(--border);display:block;background:var(--bg);content-visibility:auto}
   </style>
 
 </head>
@@ -589,7 +589,12 @@ function showCategoryNameModal(whId,initial){
         await dbUpdate(`users/${currentUser.username}/whCategories`,upd);
         if(catFilter===initial)catFilter=name;
       }else{
-        await dbSet(`users/${currentUser.username}/whCategories/${whId}`,name);
+        whCategories[whId]=name;
+        if(!catOrder.includes(name))catOrder=[...catOrder,name];
+        close();renderCatChips();applyCatFilter();
+        await dbSet(`users/${currentUser.username}/whCategories/${whId}`,name).catch(()=>{});
+        await dbSet(`users/${currentUser.username}/catOrder`,catOrder).catch(()=>{});
+        return;
       }
       close();
     }},"שמור");
@@ -598,14 +603,45 @@ function showCategoryNameModal(whId,initial){
     setTimeout(()=>{inp.focus();if(initial)inp.select()},100);
   });
 }
-async function startAddCategory(){
+// One modal: name + warehouse picker together. (Chaining an action sheet into
+// a modal made the UI feel stuck while the sheet animated out.)
+function startAddCategory(){
+  if(!homeScreen)return;
   if(!lastHomeWhIds.length){showNotice("צור מחסן קודם");return}
-  const opts=lastHomeWhIds.map(id=>{
-    const w=cacheGet(`warehouses/${id}`);
-    return {label:(w&&w.name)||"מחסן",value:id};
+  showModal(homeScreen,(m,close)=>{
+    m.appendChild(el("h3",{style:{marginBottom:"14px"}},"קטגוריה חדשה"));
+    const inp=el("input",{className:"app-input",placeholder:'שם הקטגוריה (למשל: "בית")',style:{marginBottom:"14px"}});
+    m.appendChild(inp);
+    m.appendChild(el("p",{style:{fontSize:"13px",color:"var(--text-sec)",marginBottom:"8px"}},"בחר מחסנים לשיוך:"));
+    const listWrap=el("div",{style:{maxHeight:"38vh",overflowY:"auto",marginBottom:"6px"}});
+    const chosen=new Set();
+    lastHomeWhIds.forEach(id=>{
+      const w=cacheGet(`warehouses/${id}`);
+      const row=el("div",{style:{display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"12px",marginBottom:"6px",cursor:"pointer"},onClick:()=>{
+        if(chosen.has(id)){chosen.delete(id);mark.textContent="";row.style.borderColor="var(--border)"}
+        else{chosen.add(id);mark.textContent="✓";row.style.borderColor="var(--accent)"}
+      }});
+      const mark=el("span",{style:{color:"var(--accent)",fontWeight:"700",width:"14px",flexShrink:"0"}},"");
+      row.append(mark,el("span",{style:{fontSize:"14px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},(w&&w.name)||"מחסן"));
+      listWrap.appendChild(row);
+    });
+    m.appendChild(listWrap);
+    const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"12px"}});
+    btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
+    const ok=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
+      const name=inp.value.trim();
+      if(!name||!chosen.size){showNotice(!name?"הכנס שם קטגוריה":"בחר לפחות מחסן אחד");return}
+      ok.disabled=true;
+      const upd={};chosen.forEach(id=>{upd[id]=name;whCategories[id]=name});
+      if(!catOrder.includes(name))catOrder=[...catOrder,name];
+      close();renderCatChips();applyCatFilter();
+      await dbUpdate(`users/${currentUser.username}/whCategories`,upd).catch(()=>{});
+      await dbSet(`users/${currentUser.username}/catOrder`,catOrder).catch(()=>{});
+    }},"שמור");
+    btns.appendChild(ok);m.appendChild(btns);
+    inp.addEventListener("keydown",e=>{if(e.key==="Enter")ok.click()});
+    setTimeout(()=>inp.focus(),100);
   });
-  const whId=await showActionSheet(opts,"לאיזה מחסן לשייך את הקטגוריה?");
-  if(whId)showCategoryNameModal(whId,null);
 }
 // One management screen: inline rename, one-tap delete (with undo), and
 // up/down reordering — replaces the old multi-sheet flow.
@@ -679,7 +715,7 @@ function manageCategoriesSheet(){
       });
     }
     redraw();
-    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"4px"},onClick:()=>{close();startAddCategory()}},"+ הוסף קטגוריה"));
+    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"4px"},onClick:()=>{close();setTimeout(startAddCategory,80)}},"+ הוסף קטגוריה"));
     m.appendChild(el("button",{className:"btn btn-primary",style:{width:"100%",marginTop:"12px"},onClick:close},"סגור"));
   });
 }
@@ -687,7 +723,13 @@ function renderCatChips(){
   const c=cachedHomeContent;if(!c)return;
   let bar=c.querySelector('#catChips');
   const cats=currentCats();
-  if(!bar){bar=el("div",{id:"catChips",style:{display:"flex",gap:"8px",overflowX:"auto",WebkitOverflowScrolling:"touch",marginBottom:"12px",paddingBottom:"2px",scrollbarWidth:"none"}});c.insertBefore(bar,c.firstChild)}
+  if(!bar){bar=el("div",{id:"catChips",style:{display:"flex",gap:"8px",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",
+    position:"sticky",top:"0",zIndex:"40",background:"var(--bg)",padding:"8px 0 10px",marginBottom:"2px"}});c.insertBefore(bar,c.firstChild)}
+  // Sticky under the header — measured after render so it never hides behind it.
+  requestAnimationFrame(()=>{
+    const h=homeScreen&&homeScreen.querySelector('.header');
+    if(h)bar.style.top=h.offsetHeight+"px";
+  });
   bar.innerHTML="";
   if(!cats.length){
     catFilter=null;
@@ -1073,7 +1115,7 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
         const c2=await showActionSheet(opts,`קטגוריה עבור "${wh.name}" (אישי — רק אצלך)`);
         if(!c2)return;
         if(c2==="new"){
-          showCategoryNameModal(whId,null);
+          setTimeout(()=>showCategoryNameModal(whId,null),80);
         }else if(c2==="clear"){
           await dbRemove(`users/${currentUser.username}/whCategories/${whId}`);
         }else if(c2.indexOf("set:")===0){
@@ -1432,11 +1474,14 @@ function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
 
 // Low-stock: an item with lowStock set is "low" when 0 < quantity <= lowStock.
 // Quantity 0 is "out of stock" regardless of threshold.
+function lowStockOn(){return currentWhData?.features?.showLowStock!==false}
 function isLowStock(it){
+  if(!lowStockOn())return false;
   const q=it.quantity||0;const t=parseInt(it.lowStock);
   return t>0&&q>0&&q<=t;
 }
 function stockChip(it){
+  if(!lowStockOn())return null;
   const q=it.quantity||0;
   const label=q===0?"אזל":isLowStock(it)?"מלאי נמוך":null;
   if(!label)return null;
@@ -1448,7 +1493,8 @@ function stockChip(it){
 }
 function qtyColor(it){
   const q=it.quantity||0;
-  return q===0?"var(--danger)":isLowStock(it)?"var(--warning)":"var(--accent)";
+  if(q===0)return lowStockOn()?"var(--danger)":"var(--danger)";
+  return isLowStock(it)?"var(--warning)":"var(--accent)";
 }
 
 function renderItemsList(c,whId,items,wrap){
@@ -1480,8 +1526,9 @@ function renderItemsList(c,whId,items,wrap){
   }else{
     filtered=[...filtered].sort((a,b)=>(a[1].order||0)-(b[1].order||0));
   }
+  if(!lowStockOn()&&lowFilter)lowFilter=false;
   if(lowFilter)filtered=filtered.filter(([,it])=>(it.quantity||0)===0||isLowStock(it));
-  const lowCount=items.filter(([,it])=>(it.quantity||0)===0||isLowStock(it)).length;
+  const lowCount=lowStockOn()?items.filter(([,it])=>(it.quantity||0)===0||isLowStock(it)).length:0;
 
   // Check if we can do an in-place update (same items, same order)
   const existingCards=listContainer.querySelectorAll('[data-item-id]');
@@ -1527,7 +1574,7 @@ function renderItemsList(c,whId,items,wrap){
         if(slotEl){
           const thumbEl=slotEl.querySelector('.item-thumb');
           const thumbSrc=item.thumb||item.image;
-          if(thumbSrc){if(thumbEl){if(thumbEl.src!==thumbSrc)thumbEl.src=thumbSrc;}else{const t=el("img",{className:"item-thumb",src:thumbSrc,onClick:async()=>showImageViewer(await fetchFullImage(whId,itemId,item))});slotEl.appendChild(t);}}
+          if(thumbSrc){if(thumbEl){if(thumbEl.src!==thumbSrc)thumbEl.src=thumbSrc;}else{const t=el("img",{className:"item-thumb",src:thumbSrc,loading:"lazy",decoding:"async",onClick:async()=>{const v=showImageViewer(item.thumb||thumbSrc);const full=await fetchFullImage(whId,itemId,item);if(v&&full)v.src=full}});slotEl.appendChild(t);}}
           else if(thumbEl)thumbEl.remove();
         }
       }else if(slotEl)slotEl.remove();
@@ -1845,7 +1892,7 @@ function renderItemsList(c,whId,items,wrap){
     if(currentWhData?.features?.showImages!==false&&!reorderMode){
       const slot=el("div",{className:"item-img-slot"});
       const thumbSrc=item.thumb||item.image;
-      if(thumbSrc){const t=el("img",{className:"item-thumb",src:thumbSrc,onClick:async()=>showImageViewer(await fetchFullImage(whId,itemId,item))});slot.appendChild(t);}
+      if(thumbSrc){const t=el("img",{className:"item-thumb",src:thumbSrc,loading:"lazy",decoding:"async",onClick:async()=>{const v=showImageViewer(thumbSrc);const full=await fetchFullImage(whId,itemId,item);if(v&&full)v.src=full}});slot.appendChild(t);}
       card.append(info,slot,actions);
     }else{
       card.append(info,actions);
@@ -1871,7 +1918,9 @@ function encodeImageVariants(file,cb){
         canvas.getContext('2d').drawImage(img,0,0,w,h);
         return canvas.toDataURL('image/jpeg',quality);
       }
-      cb({full:toDataUrl(800,0.72),thumb:toDataUrl(160,0.55)});
+      // Thumb kept small on purpose: it rides inside the warehouse payload, so
+      // every extra KB slows the whole list's first paint.
+      cb({full:toDataUrl(800,0.72),thumb:toDataUrl(96,0.5)});
     };
     img.src=e.target.result;
   };
@@ -1890,10 +1939,15 @@ function makeThumbFromDataUrl(dataUrl,maxPx,quality,cb){
 }
 // Returns the full-resolution image for viewing. Legacy items (from before this
 // change) still carry it inline as item.image; newer items keep it at itemImages/.
+const fullImageCache=new Map(); // whId/itemId -> data URL, for this session
 async function fetchFullImage(whId,itemId,item){
   if(item.image)return item.image;
+  const key=whId+"/"+itemId;
+  if(fullImageCache.has(key))return fullImageCache.get(key);
   const full=await dbGet(`itemImages/${whId}/${itemId}`);
-  return full||item.thumb||null;
+  const val=full||item.thumb||null;
+  if(full)fullImageCache.set(key,full);
+  return val;
 }
 // One-time background migration: moves any old inline item.image out to itemImages/
 // and leaves a small item.thumb behind, so the item stops being part of every
@@ -1908,7 +1962,7 @@ async function migrateLegacyItemImages(whId,items){
     if(migratingItemImages.has(key))continue;
     migratingItemImages.add(key);
     try{
-      const thumb=item.thumb||await new Promise(res=>makeThumbFromDataUrl(item.image,160,0.55,res));
+      const thumb=item.thumb||await new Promise(res=>makeThumbFromDataUrl(item.image,96,0.5,res));
       await dbSet(`itemImages/${whId}/${itemId}`,item.image);
       await dbUpdate(`warehouses/${whId}`,{[`items/${itemId}/thumb`]:thumb,[`items/${itemId}/image`]:null});
     }catch(e){/* leave it; will retry on next load */}
@@ -1918,9 +1972,10 @@ async function migrateLegacyItemImages(whId,items){
 
 function showImageViewer(imgData){
   const ov=el('div',{style:{position:'fixed',inset:'0',zIndex:'5000',background:'rgba(0,0,0,0.96)',display:'flex',alignItems:'center',justifyContent:'center'},onClick:()=>ov.remove()});
-  const img=el('img',{src:imgData,style:{maxWidth:'92vw',maxHeight:'88vh',borderRadius:'14px',objectFit:'contain',boxShadow:'0 20px 60px rgba(0,0,0,0.6)'}});
+  const img=el('img',{src:imgData,decoding:'async',style:{maxWidth:'92vw',maxHeight:'88vh',borderRadius:'14px',objectFit:'contain',boxShadow:'0 20px 60px rgba(0,0,0,0.6)'}});
   const closeHint=el('div',{style:{position:'absolute',bottom:'24px',left:'0',right:'0',textAlign:'center',fontSize:'13px',color:'rgba(255,255,255,0.4)'}},'הקש לסגירה');
   ov.append(img,closeHint);document.body.appendChild(ov);
+  return img; // caller can swap in a higher-res source once it arrives
 }
 
 // ═══════════ MODALS ═══════════
@@ -1977,7 +2032,7 @@ function showNewItemModal(parent,whId){
     m.appendChild(el("h3",{style:{marginBottom:"16px"}},"פריט חדש"));
     const ni=el("input",{className:"app-input",placeholder:"שם הפריט (למשל: חולצה)",style:{marginBottom:"12px"}});
     const qi=el("input",{className:"app-input",placeholder:"כמות התחלתית (ברירת מחדל: 0)",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
-    const lowInput=el("input",{className:"app-input",placeholder:"סף התראת מלאי נמוך (אופציונלי)",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
+    const lowInput=el("input",{className:"app-input",placeholder:"סף התראת מלאי נמוך (אופציונלי)",type:"number",inputMode:"numeric",style:{marginBottom:"12px",display:lowStockOn()?"":"none"}});
     const skuInput=el("input",{className:"app-input",placeholder:'מק"ט (אופציונלי)',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off",style:{marginBottom:"12px"}});
     const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
     m.append(ni,qi,lowInput,skuInput,noteInput);
@@ -2091,7 +2146,7 @@ function showEditItemModal(parent,whId,itemId,item){
     ni.value=item.name;
     const qi=el("input",{className:"app-input",placeholder:"כמות",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
     qi.value=item.quantity||0;
-    const lowInput=el("input",{className:"app-input",placeholder:"סף התראת מלאי נמוך (אופציונלי)",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
+    const lowInput=el("input",{className:"app-input",placeholder:"סף התראת מלאי נמוך (אופציונלי)",type:"number",inputMode:"numeric",style:{marginBottom:"12px",display:lowStockOn()?"":"none"}});
     lowInput.value=item.lowStock||"";
     const skuInput=el("input",{className:"app-input",placeholder:'מק"ט (אופציונלי)',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off",style:{marginBottom:"12px"}});
     skuInput.value=item.sku||"";
@@ -2435,6 +2490,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
     const featDefs=[
       {key:'showSku',label:'הצג מק"ט על פריטים'},
       {key:'showImages',label:'הצג תמונות על פריטים'},
+      {key:'showLowStock',label:'התראות מלאי נמוך'},
     ];
     featDefs.forEach(({key,label},i)=>{
       toggleRow(dp,label,features[key]!==false,async state=>{
@@ -2893,7 +2949,7 @@ function showStockCountModal(parent,whId){
       body.innerHTML="";
       const card=el("div",{style:{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"14px",padding:"14px 16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"12px"}});
       const thumbSrc=item.thumb||item.image;
-      if(thumbSrc)card.appendChild(el("img",{src:thumbSrc,className:"item-thumb"}));
+      if(thumbSrc)card.appendChild(el("img",{src:thumbSrc,className:"item-thumb",decoding:"async"}));
       const info=el("div",{style:{flex:"1",minWidth:"0"}});
       info.appendChild(el("div",{style:{fontSize:"17px",fontWeight:"600"}},item.name));
       if(item.sku)info.appendChild(el("div",{style:{fontSize:"11px",color:"var(--text-muted)",marginTop:"2px"}},`מק"ט: ${item.sku}`));
@@ -3118,6 +3174,19 @@ function init(){
   try{const s=localStorage.getItem("inv_user");if(s){currentUser=JSON.parse(s);renderHome()}}catch{}
   if(window.FB){FB=window.FB;onFirebaseReady()}
   else window.addEventListener("firebase-ready",()=>{FB=window.FB;onFirebaseReady()});
+  // Watchdog: if Firebase never comes up (stale cached bundle after an update,
+  // flaky network, blocked CDN) the app used to sit on the loading dots
+  // forever. After 6s show SOMETHING usable: the cached home screen if we have
+  // a stored user, otherwise the login screen.
+  setTimeout(()=>{
+    if(authReady)return;
+    const app=$("#app");
+    if(app&&app.querySelector(".screen"))return;
+    try{
+      if(currentUser)renderHome();
+      else renderAuth();
+    }catch(e){}
+  },6000);
 }
 let authReady=false;
 function onFirebaseReady(){
