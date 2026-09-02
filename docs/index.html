@@ -599,6 +599,7 @@ async function startAddCategory(){
 }
 async function manageCategoriesSheet(){
   const cats=currentCats();
+  if(!cats.length){showNotice("אין קטגוריות עדיין");return}
   const cat=await showActionSheet(cats.map(x=>({label:x,value:x})),"בחר קטגוריה לעריכה");
   if(!cat)return;
   const act=await showActionSheet([
@@ -628,9 +629,7 @@ function renderCatChips(){
   const mk=(label,val)=>el("button",{className:"toolbar-btn"+((catFilter===val)?" active":""),onClick:()=>{catFilter=val;renderCatChips();applyCatFilter()}},label);
   bar.appendChild(mk("הכל",null));
   cats.forEach(cat=>bar.appendChild(mk(cat,cat)));
-  const editChip=el("button",{className:"toolbar-btn",title:"עריכת קטגוריות",onClick:manageCategoriesSheet});
-  editChip.appendChild(icon("edit",13));
-  bar.appendChild(editChip);
+  bar.appendChild(el("button",{className:"toolbar-btn",title:"הוסף קטגוריה",onClick:startAddCategory},"+"));
 }
 function applyCatFilter(){
   const cont=document.getElementById('warehouseCards');if(!cont)return;
@@ -2888,7 +2887,8 @@ function showSettingsModal(parent){
     sc.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500",marginBottom:"4px"}},"שיתוף מחסנים"));
     sc.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-sec)"}},"מחסנים משותפים מסונכרנים בזמן אמת בין כל החברים."));
     m.appendChild(sc);
-    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"8px"},onClick:()=>{close();showChangePasswordModal(parent)}},"שנה סיסמה"));
+    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"8px"},onClick:()=>{close();manageCategoriesSheet()}},"ניהול קטגוריות"));
+    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"12px"},onClick:()=>{close();showChangePasswordModal(parent)}},"שנה סיסמה"));
     m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"12px",color:"var(--danger)",borderColor:"rgba(255,92,92,.3)"},onClick:()=>{
       cleanup();
       homeUnsubs.forEach(f=>f());homeUnsubs=[];
