@@ -294,6 +294,49 @@ function dbListenCached(p,cb){
 }
 function render(s){const a=$("#app");a.innerHTML="";a.appendChild(s)}
 
+// ═══════════ JOIN-BY-QR ═══════════
+// A warehouse QR encodes APP_URL#join=<whId>.<inviteToken>. Scanning it with
+// the phone camera opens the app; after login the app presents the token and
+// the security rules let the scanner add themselves as a member — no manual
+// username typing. The token lives at warehouses/<id>/inviteToken; renewing it
+// invalidates every previously printed/shared QR.
+const APP_URL="https://yosefdana1-png.github.io/inventory-app/";
+let pendingJoin=null;
+(function(){
+  const m=location.hash.match(/^#join=([A-Za-z0-9]+)\.([A-Za-z0-9]+)$/);
+  if(m){pendingJoin={whId:m[1],token:m[2]};try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}}
+})();
+async function processPendingJoin(){
+  if(!pendingJoin||!FB||!currentUser)return; // retried on the next home render
+  const{whId,token}=pendingJoin;pendingJoin=null;
+  try{
+    // The rules accept this write only when the value equals the warehouse's
+    // current inviteToken (or if we're already a member).
+    await dbSet(`warehouses/${whId}/members/${currentUser.username}`,token);
+    await dbSet(`users/${currentUser.username}/warehouses/${whId}`,Date.now());
+    let name="";try{name=(await dbGet(`warehouses/${whId}/name`))||""}catch(e){}
+    showNotice(name?`הצטרפת למחסן "${name}"`:"הצטרפת למחסן");
+  }catch(e){
+    showNotice("קוד ההצטרפות אינו תקף — בקש קוד חדש מחבר במחסן");
+  }
+}
+// Small auto-hiding notice (no button) in the same style as the undo toast.
+function showNotice(message){
+  hideUndoToast();
+  const t=el("div",{className:"undo-toast"});
+  t.appendChild(el("span",{style:{flex:"1"}},message));
+  document.body.appendChild(t);
+  undoToastEl=t;
+  undoTimer=setTimeout(hideUndoToast,4000);
+}
+function loadQRLib(){
+  return window.QRCode?Promise.resolve():new Promise((res,rej)=>{
+    const sc=document.createElement("script");
+    sc.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+    sc.onload=res;sc.onerror=rej;document.head.appendChild(sc);
+  });
+}
+
 // ═══════════ UNDO TOAST ═══════════
 // A short-lived "בטל" bar after destructive actions. One at a time — a new
 // action replaces the previous toast (and its undo window).
@@ -502,6 +545,7 @@ function sortedWhIds(data){
 }
 
 function attachHomeWarehouseListener(content,screen){
+  processPendingJoin();
   homeUnsubs.forEach(f=>f());homeUnsubs=[];
   if(!FB){
     const cached=cacheGet(`users/${currentUser.username}/warehouses`);
@@ -2149,6 +2193,50 @@ function showShareModal(parent,whId,wh){
       }
       m.appendChild(ml);
     }
+
+    // ── Join-by-QR ──
+    const qrBtn=el("button",{className:"btn btn-ghost",style:{width:"100%",marginBottom:"14px"},onClick:async()=>{
+      qrBtn.disabled=true;qrBtn.textContent="טוען...";
+      try{
+        let token=wh.inviteToken;
+        if(!token){token=genId()+genId();await dbSet(`warehouses/${whId}/inviteToken`,token);wh.inviteToken=token}
+        await loadQRLib();
+        const joinUrl=`${APP_URL}#join=${whId}.${token}`;
+        qrBtn.style.display="none";
+        qrWrap.style.display="";
+        qrBox.innerHTML="";
+        new QRCode(qrBox,{text:joinUrl,width:190,height:190,correctLevel:QRCode.CorrectLevel.M});
+        qrWrap.dataset.url=joinUrl;
+      }catch(e){qrBtn.disabled=false;qrBtn.textContent="קוד QR להצטרפות";showNotice("שגיאה בטעינת הקוד — נסה שוב")}
+    }},"קוד QR להצטרפות");
+    m.appendChild(qrBtn);
+    const qrWrap=el("div",{style:{display:"none",textAlign:"center",marginBottom:"14px"}});
+    const qrBox=el("div",{style:{background:"#fff",borderRadius:"12px",padding:"12px",display:"inline-block"}});
+    qrWrap.appendChild(qrBox);
+    qrWrap.appendChild(el("p",{style:{fontSize:"12px",color:"var(--text-sec)",marginTop:"8px"}},"סריקה עם מצלמת הטלפון מצרפת למחסן"));
+    const qrActions=el("div",{style:{display:"flex",gap:"6px",marginTop:"8px",justifyContent:"center"}});
+    const copyLinkBtn=el("button",{className:"toolbar-btn",onClick:async()=>{
+      try{await navigator.clipboard.writeText(qrWrap.dataset.url);copyLinkBtn.textContent="הועתק!";setTimeout(()=>{copyLinkBtn.textContent="העתק קישור"},1500)}catch(e){}
+    }},"העתק קישור");
+    const shareLinkBtn=el("button",{className:"toolbar-btn",onClick:async()=>{
+      if(navigator.share){try{await navigator.share({text:`הצטרף למחסן "${wh.name}" באפליקציית ניהול מלאי:\n${qrWrap.dataset.url}`})}catch(e){}}
+      else copyLinkBtn.click();
+    }},"שתף");
+    const renewBtn=el("button",{className:"toolbar-btn danger-hover",onClick:async()=>{
+      const c=await showActionSheet([{label:"צור קוד חדש (הקודים הישנים יפסיקו לעבוד)",style:"danger",value:"ok"}]);
+      if(c!=="ok")return;
+      const token=genId()+genId();
+      await dbSet(`warehouses/${whId}/inviteToken`,token);
+      wh.inviteToken=token;
+      const joinUrl=`${APP_URL}#join=${whId}.${token}`;
+      qrBox.innerHTML="";
+      new QRCode(qrBox,{text:joinUrl,width:190,height:190,correctLevel:QRCode.CorrectLevel.M});
+      qrWrap.dataset.url=joinUrl;
+      showNotice("נוצר קוד חדש");
+    }},"חדש קוד");
+    qrActions.append(copyLinkBtn,shareLinkBtn,renewBtn);
+    qrWrap.appendChild(qrActions);
+    m.appendChild(qrWrap);
 
     const ui=el("input",{className:"app-input",placeholder:"שם משתמש להוספה",autocapitalize:"off"});m.appendChild(ui);
     const err=el("p",{style:{color:"var(--danger)",fontSize:"13px",marginTop:"8px",minHeight:"20px"}});

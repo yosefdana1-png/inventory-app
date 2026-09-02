@@ -33,7 +33,12 @@
     "warehouses": {
       "$whId": {
         ".read": "auth != null && data.child('members').hasChild(root.child('uids').child(auth.uid).child('username').val())",
-        ".write": "auth != null && (!data.exists() || data.child('members').hasChild(root.child('uids').child(auth.uid).child('username').val()))"
+        ".write": "auth != null && (!data.exists() || data.child('members').hasChild(root.child('uids').child(auth.uid).child('username').val()))",
+        "members": {
+          "$member": {
+            ".write": "auth != null && root.child('uids').child(auth.uid).child('username').val() === $member && newData.isString() && newData.val().length > 8 && newData.val() === data.parent().parent().child('inviteToken').val()"
+          }
+        }
       }
     },
 
