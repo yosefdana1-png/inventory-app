@@ -830,12 +830,17 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
     const moreBtn=el("button",{className:"icon-btn",onClick:async e=>{
       e.stopPropagation();
       const isOwner=wh.owner===currentUser.username;
-      const choice=await showActionSheet([
-        {label:"יצוא רשימה",value:"export"},
-        {label:"שיתוף וניהול חברים",value:"share"},
-        {label:"שלח עותק למשתמש",value:"copy"},
-        {label:isOwner?"מחק מחסן":"עזוב מחסן",style:"danger",value:"delete"},
-      ]);
+      // Role computed from the card's own data — currentWhData belongs to the
+      // detail screen and isn't reliable here on the home screen.
+      const isAdminHere=isOwner||(wh.roles&&wh.roles[currentUser.username]==='admin');
+      const canShare=isAdminHere||!(wh.permissions&&wh.permissions.restrict_share);
+      const menuOpts=[{label:"יצוא רשימה",value:"export"}];
+      if(canShare){
+        menuOpts.push({label:"שיתוף וניהול חברים",value:"share"});
+        menuOpts.push({label:"שלח עותק למשתמש",value:"copy"});
+      }
+      menuOpts.push({label:isOwner?"מחק מחסן":"עזוב מחסן",style:"danger",value:"delete"});
+      const choice=await showActionSheet(menuOpts);
       if(choice==="export"){
         const items=await dbGet(`warehouses/${whId}/items`);
         showExportModal(wrap,whId,Object.entries(items||{}));
@@ -2054,6 +2059,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
         {key:'restrict_add',label:'מנע הוספת פריטים לחברים'},
         {key:'restrict_reset',label:'מנע איפוס כמויות לחברים'},
         {key:'restrict_edit',label:'מנע עריכה ומחיקה לחברים'},
+        {key:'restrict_share',label:'מנע שיתוף וצירוף חברים לחברים'},
       ];
       permDefs.forEach(({key,label})=>{
         const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid var(--border)"}});
