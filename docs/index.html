@@ -306,13 +306,20 @@ function showUndoToast(message,restoreFn){
   hideUndoToast();
   const t=el("div",{className:"undo-toast"});
   t.appendChild(el("span",{style:{flex:"1",minWidth:"0",overflow:"hidden",textOverflow:"ellipsis"}},message));
-  t.appendChild(el("button",{className:"undo-btn",onClick:async()=>{
+  let remaining=8;
+  const btn=el("button",{className:"undo-btn",onClick:async()=>{
     hideUndoToast();
     try{await restoreFn()}catch(e){}
-  }},"בטל"));
+  }},`בטל (${remaining})`);
+  t.appendChild(btn);
   document.body.appendChild(t);
   undoToastEl=t;
-  undoTimer=setTimeout(hideUndoToast,8000);
+  // Countdown in the button itself — the user sees how long the offer lasts.
+  undoTimer=setInterval(()=>{
+    remaining--;
+    if(remaining<=0){hideUndoToast();return}
+    btn.textContent=`בטל (${remaining})`;
+  },1000);
 }
 function cleanup(){unsubscribers.forEach(f=>f());unsubscribers=[]}
 
@@ -1033,11 +1040,13 @@ function renderItemsView(c,whId,items,wrap){
       });
     }});
     resetBtn.appendChild(icon("reset",14));resetBtn.appendChild(document.createTextNode("אפס כמויות"));
+    const countBtn=el("button",{className:"toolbar-btn",onClick:()=>showStockCountModal(wrap,currentWhId)});
+    countBtn.appendChild(icon("reset",14));countBtn.appendChild(document.createTextNode("ספירת מלאי"));
     const exportBtn=el("button",{className:"toolbar-btn",onClick:()=>showExportModal(wrap,currentWhId,currentItems)});
     exportBtn.appendChild(icon("note",14));exportBtn.appendChild(document.createTextNode("יצוא רשימה"));
     const importBtn=el("button",{className:"toolbar-btn",style:{display:memberCan('add')?'':'none'},onClick:()=>showImportModal(wrap,currentWhId)});
     importBtn.appendChild(icon("upload",14));importBtn.appendChild(document.createTextNode("ייבוא"));
-    toolbar.append(sortWrap,resetBtn,exportBtn,importBtn);
+    toolbar.append(sortWrap,countBtn,resetBtn,exportBtn,importBtn);
     searchWrap.appendChild(toolbar);
     
     // Insert searchWrap into wrap, right before content
@@ -2435,6 +2444,93 @@ function showImportModal(parent,whId){
       }
     };
     btns.append(cancelBtn,mainBtn);m.appendChild(btns);
+  });
+}
+
+// ═══════════ STOCK COUNT MODE ═══════════
+// Guided periodic stocktake: walks the warehouse item-by-item in the list
+// order. Confirming keeps the recorded quantity; typing a different number
+// corrects it — written IMMEDIATELY with a "ספירה" history entry, so closing
+// mid-way loses nothing that was already confirmed.
+function showStockCountModal(parent,whId){
+  const list=[...currentItems].sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  showModal(parent,(m,close)=>{
+    m.appendChild(el("h3",{style:{marginBottom:"2px"}},"ספירת מלאי"));
+    if(!list.length){
+      m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",margin:"12px 0"}},"אין פריטים לספירה"));
+      m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%"},onClick:close},"סגור"));
+      return;
+    }
+    const prog=el("p",{style:{color:"var(--text-muted)",fontSize:"12px",marginBottom:"10px"}});
+    const barWrap=el("div",{style:{height:"4px",background:"var(--border)",borderRadius:"2px",marginBottom:"16px",overflow:"hidden"}});
+    const bar=el("div",{style:{height:"100%",width:"0%",background:"var(--accent)",borderRadius:"2px",transition:"width .25s ease"}});
+    barWrap.appendChild(bar);
+    const body=el("div");
+    m.append(prog,barWrap,body);
+    let idx=0,adjusted=0,confirmed=0,skipped=0;
+    const st=list.map(()=>null); // per-item outcome: 'ok' | 'adj' | 'skip'
+
+    function renderSummary(){
+      body.innerHTML="";prog.textContent="";bar.style.width="100%";
+      body.appendChild(el("p",{style:{fontSize:"15px",fontWeight:"600",marginBottom:"6px"}},"הספירה הושלמה"));
+      body.appendChild(el("p",{style:{fontSize:"13px",color:"var(--text-sec)",marginBottom:"16px"}},`${confirmed} אושרו · ${adjusted} תוקנו · ${skipped} דולגו`));
+      body.appendChild(el("button",{className:"btn btn-primary",style:{width:"100%"},onClick:close},"סיום"));
+    }
+
+    function renderStep(){
+      if(idx>=list.length){renderSummary();return}
+      const[itemId,item]=list[idx];
+      prog.textContent=`פריט ${idx+1} מתוך ${list.length}`;
+      bar.style.width=(idx/list.length*100)+"%";
+      body.innerHTML="";
+      const card=el("div",{style:{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"14px",padding:"14px 16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"12px"}});
+      const thumbSrc=item.thumb||item.image;
+      if(thumbSrc)card.appendChild(el("img",{src:thumbSrc,className:"item-thumb"}));
+      const info=el("div",{style:{flex:"1",minWidth:"0"}});
+      info.appendChild(el("div",{style:{fontSize:"17px",fontWeight:"600"}},item.name));
+      if(item.sku)info.appendChild(el("div",{style:{fontSize:"11px",color:"var(--text-muted)",marginTop:"2px"}},`מק"ט: ${item.sku}`));
+      if(item.note)info.appendChild(el("div",{className:"note-text"},item.note));
+      info.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)",marginTop:"6px"}},`כמות רשומה: ${item.quantity||0}`));
+      card.appendChild(info);
+      body.appendChild(card);
+      const qi=el("input",{className:"app-input",type:"number",inputMode:"numeric",style:{fontSize:"22px",textAlign:"center",fontWeight:"700",marginBottom:"10px"}});
+      qi.value=item.quantity||0;
+      body.appendChild(qi);
+      const err=el("p",{style:{color:"var(--danger)",fontSize:"12px",minHeight:"16px",margin:"0 0 6px"}});
+      body.appendChild(err);
+      const row=el("div",{style:{display:"flex",gap:"8px"}});
+      const backBtn=el("button",{className:"btn btn-ghost",style:{flex:"0 0 auto",padding:"12px 14px",display:idx>0?"flex":"none"},onClick:()=>{
+        idx--;
+        const p=st[idx];
+        if(p==="ok")confirmed--;else if(p==="adj")adjusted--;else if(p==="skip")skipped--;
+        st[idx]=null;
+        renderStep();
+      }});
+      backBtn.appendChild(icon("forward",16));
+      const skipBtn=el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:()=>{st[idx]="skip";skipped++;idx++;renderStep()}},"דלג");
+      const okBtn=el("button",{className:"btn btn-primary",style:{flex:"2"},onClick:async()=>{
+        const v=parseInt(qi.value);
+        if(isNaN(v)||v<0){err.textContent="הכנס כמות תקינה";return}
+        okBtn.disabled=true;
+        try{
+          const cur=item.quantity||0;
+          if(v!==cur){
+            await dbUpdate(`warehouses/${whId}`,{
+              [`items/${itemId}/quantity`]:v,
+              [`items/${itemId}/history/${genId()}`]:{action:"ספירה",amount:Math.abs(v-cur),result:v,by:currentUser.displayName,date:new Date().toISOString()}
+            });
+            item.quantity=v;
+            st[idx]="adj";adjusted++;
+          }else{st[idx]="ok";confirmed++}
+          idx++;renderStep();
+        }catch(e){err.textContent="שגיאה בשמירה — נסה שוב";okBtn.disabled=false}
+      }},"אשר והמשך");
+      row.append(backBtn,skipBtn,okBtn);
+      body.appendChild(row);
+      qi.addEventListener("keydown",e=>{if(e.key==="Enter")okBtn.click()});
+      setTimeout(()=>{qi.focus();qi.select()},60);
+    }
+    renderStep();
   });
 }
 
