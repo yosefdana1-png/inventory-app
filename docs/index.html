@@ -150,6 +150,8 @@
     .note-text{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .drag-handle{cursor:grab;touch-action:none;color:var(--text-muted);padding:4px}
     .drag-handle:active{cursor:grabbing}
+    .undo-toast{position:fixed;bottom:calc(104px + env(safe-area-inset-bottom));left:16px;right:16px;z-index:4000;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px 12px 12px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,.55);animation:fadeIn .2s ease}
+    .undo-btn{background:var(--accent-glow);border:1px solid rgba(79,140,255,.3);color:var(--accent);border-radius:10px;padding:8px 18px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0}
     .item-img-slot{width:56px;height:56px;flex-shrink:0;margin-right:10px;border-radius:10px}
     .item-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;cursor:pointer;border:1px solid var(--border);display:block}
   </style>
@@ -291,6 +293,27 @@ function dbListenCached(p,cb){
   unsubscribers.push(u);return u;
 }
 function render(s){const a=$("#app");a.innerHTML="";a.appendChild(s)}
+
+// ═══════════ UNDO TOAST ═══════════
+// A short-lived "בטל" bar after destructive actions. One at a time — a new
+// action replaces the previous toast (and its undo window).
+let undoToastEl=null,undoTimer=null;
+function hideUndoToast(){
+  if(undoTimer){clearTimeout(undoTimer);undoTimer=null}
+  if(undoToastEl){undoToastEl.remove();undoToastEl=null}
+}
+function showUndoToast(message,restoreFn){
+  hideUndoToast();
+  const t=el("div",{className:"undo-toast"});
+  t.appendChild(el("span",{style:{flex:"1",minWidth:"0",overflow:"hidden",textOverflow:"ellipsis"}},message));
+  t.appendChild(el("button",{className:"undo-btn",onClick:async()=>{
+    hideUndoToast();
+    try{await restoreFn()}catch(e){}
+  }},"בטל"));
+  document.body.appendChild(t);
+  undoToastEl=t;
+  undoTimer=setTimeout(hideUndoToast,8000);
+}
 function cleanup(){unsubscribers.forEach(f=>f());unsubscribers=[]}
 
 // ═══════════ iOS-STYLE NAVIGATION STACK ═══════════
@@ -779,7 +802,10 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
           // An owner "deleting" a shared warehouse used to silently just LEAVE,
           // stranding an ownerless warehouse for everyone else. Now it really
           // deletes — for all members — after an explicit warning.
-          showDeleteModal(wrap,`"${wh.name}" משותף עם עוד ${others.length} חברים. המחיקה תסיר אותו לכולם והיא בלתי הפיכה. (רוצה רק לצאת? העבר קודם בעלות דרך "שיתוף וניהול חברים")`,async()=>{
+          showDeleteModal(wrap,`"${wh.name}" משותף עם עוד ${others.length} חברים. המחיקה תסיר אותו לכולם. (רוצה רק לצאת? העבר קודם בעלות דרך "שיתוף וניהול חברים")`,async()=>{
+            // Snapshot everything BEFORE deleting so undo can rebuild it.
+            const snapshot=JSON.parse(JSON.stringify(wh));
+            let imgs=null;try{imgs=await dbGet(`itemImages/${whId}`)}catch(e){}
             // Order matters under the rules: images and member links are only
             // writable while the warehouse (and our membership) still exist,
             // so the warehouse node itself goes LAST.
@@ -787,18 +813,36 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
             for(const u of others)await dbRemove(`users/${u}/warehouses/${whId}`).catch(()=>{});
             await dbRemove(`warehouses/${whId}`);
             await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+            showUndoToast(`המחסן "${wh.name}" נמחק`,async()=>{
+              // Warehouse first — restoring it restores our membership, which
+              // is what authorizes the link and image writes that follow.
+              await dbSet(`warehouses/${whId}`,snapshot);
+              await dbSet(`users/${currentUser.username}/warehouses/${whId}`,Date.now());
+              for(const u of others)await dbSet(`users/${u}/warehouses/${whId}`,Date.now()).catch(()=>{});
+              if(imgs)await dbSet(`itemImages/${whId}`,imgs);
+            });
           });
         }else{
           showDeleteModal(wrap,isOwner?`למחוק את "${wh.name}"?`:`לעזוב את "${wh.name}"?`,async()=>{
             if(others.length===0){
+              const snapshot=JSON.parse(JSON.stringify(wh));
+              let imgs=null;try{imgs=await dbGet(`itemImages/${whId}`)}catch(e){}
               // Sole member: full cleanup. Images BEFORE the warehouse node —
               // once the node is gone the rules no longer see our membership.
               await dbRemove(`itemImages/${whId}`).catch(()=>{});
               await dbRemove(`warehouses/${whId}`);
+              await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
+              showUndoToast(`המחסן "${wh.name}" נמחק`,async()=>{
+                await dbSet(`warehouses/${whId}`,snapshot);
+                await dbSet(`users/${currentUser.username}/warehouses/${whId}`,Date.now());
+                if(imgs)await dbSet(`itemImages/${whId}`,imgs);
+              });
             }else{
+              // Leaving a shared warehouse is not undoable — once out, the
+              // rules don't let a non-member re-add themselves.
               await dbRemove(`warehouses/${whId}/members/${currentUser.username}`);
+              await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
             }
-            await dbRemove(`users/${currentUser.username}/warehouses/${whId}`);
           });
         }
       }
@@ -968,12 +1012,25 @@ function renderItemsView(c,whId,items,wrap){
     const resetBtn=el("button",{className:"toolbar-btn danger-hover",style:{display:memberCan('reset')?'':'none'},onClick:async()=>{
       const choice=await showActionSheet([{label:"אפס את כל הכמויות ל-0",style:"danger",value:"confirm"}]);
       if(choice!=="confirm")return;
+      const whIdNow=currentWhId;
+      const prevQuantities={};
       const updates={};
       currentItems.forEach(([id,item])=>{
+        prevQuantities[id]=item.quantity||0;
         updates[`items/${id}/quantity`]=0;
         updates[`items/${id}/history/${genId()}`]={action:"איפוס",amount:item.quantity||0,result:0,by:currentUser.displayName,date:new Date().toISOString()};
       });
-      await dbUpdate(`warehouses/${currentWhId}`,updates);
+      await dbUpdate(`warehouses/${whIdNow}`,updates);
+      showUndoToast("כל הכמויות אופסו",async()=>{
+        const upd={};
+        Object.entries(prevQuantities).forEach(([id,q])=>{
+          if(q>0){
+            upd[`items/${id}/quantity`]=q;
+            upd[`items/${id}/history/${genId()}`]={action:"שחזור",amount:q,result:q,by:currentUser.displayName,date:new Date().toISOString()};
+          }
+        });
+        if(Object.keys(upd).length)await dbUpdate(`warehouses/${whIdNow}`,upd);
+      });
     }});
     resetBtn.appendChild(icon("reset",14));resetBtn.appendChild(document.createTextNode("אפס כמויות"));
     const exportBtn=el("button",{className:"toolbar-btn",onClick:()=>showExportModal(wrap,currentWhId,currentItems)});
@@ -1404,14 +1461,32 @@ function renderItemsList(c,whId,items,wrap){
           }else if(choice==="history"){
             showHistoryModal(wrap,item);return;
           }else if(choice==="reset"){
+            const prevQ=item.quantity||0;
             await dbUpdate(`warehouses/${whId}`,{
               [`items/${itemId}/quantity`]:0,
-              [`items/${itemId}/history/${genId()}`]:{action:"איפוס",amount:item.quantity||0,result:0,by:currentUser.displayName,date:new Date().toISOString()}
+              [`items/${itemId}/history/${genId()}`]:{action:"איפוס",amount:prevQ,result:0,by:currentUser.displayName,date:new Date().toISOString()}
             });
             item.quantity=0;
+            showUndoToast(`הכמות של "${item.name}" אופסה`,async()=>{
+              await dbUpdate(`warehouses/${whId}`,{
+                [`items/${itemId}/quantity`]:prevQ,
+                [`items/${itemId}/history/${genId()}`]:{action:"שחזור",amount:prevQ,result:prevQ,by:currentUser.displayName,date:new Date().toISOString()}
+              });
+            });
             // stay in main loop
           }else if(choice==="delete"){
-            showDeleteModal(wrap,`למחוק את "${item.name}"?`,async()=>{await dbRemove(`warehouses/${whId}/items/${itemId}`);await dbRemove(`itemImages/${whId}/${itemId}`)});
+            showDeleteModal(wrap,`למחוק את "${item.name}"?`,async()=>{
+              // Snapshot BEFORE deleting (including the full-size image, which
+              // lives outside the item) so undo can restore everything.
+              const snapshot=JSON.parse(JSON.stringify(item));
+              let fullImg=null;try{fullImg=await dbGet(`itemImages/${whId}/${itemId}`)}catch(e){}
+              await dbRemove(`warehouses/${whId}/items/${itemId}`);
+              await dbRemove(`itemImages/${whId}/${itemId}`);
+              showUndoToast(`"${item.name}" נמחק`,async()=>{
+                await dbSet(`warehouses/${whId}/items/${itemId}`,snapshot);
+                if(fullImg)await dbSet(`itemImages/${whId}/${itemId}`,fullImg);
+              });
+            });
             return;
           }
         }
