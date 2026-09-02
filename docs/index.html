@@ -928,6 +928,7 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
 let currentSort="alpha"; // alpha, manual
 let searchQuery="";
 let reorderMode=false;
+let lowFilter=false; // "show only low/out-of-stock" toggle (per screen visit)
 let currentItems=[];
 let currentWhId=null;
 let dragSrcId=null;
@@ -949,7 +950,7 @@ function memberCan(action){
 }
 
 function renderListDetail(whId){
-  cleanup();currentSort="manual";searchQuery="";reorderMode=false;userWarehouseRole='member';currentWhData=null;
+  cleanup();currentSort="manual";searchQuery="";reorderMode=false;lowFilter=false;userWarehouseRole='member';currentWhData=null;
   const wrap=el("div",{className:"screen",style:{paddingBottom:"calc(100px + env(safe-area-inset-bottom))"}});
   const header=el("div",{className:"header"});
   const hr=el("div",{style:{display:"flex",alignItems:"center",gap:"12px"}});
@@ -1202,6 +1203,27 @@ function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
   return newArr;
 }
 
+// Low-stock: an item with lowStock set is "low" when 0 < quantity <= lowStock.
+// Quantity 0 is "out of stock" regardless of threshold.
+function isLowStock(it){
+  const q=it.quantity||0;const t=parseInt(it.lowStock);
+  return t>0&&q>0&&q<=t;
+}
+function stockChip(it){
+  const q=it.quantity||0;
+  const label=q===0?"אזל":isLowStock(it)?"מלאי נמוך":null;
+  if(!label)return null;
+  const danger=q===0;
+  return el("span",{className:"stock-chip",style:{fontSize:"10px",fontWeight:"600",padding:"2px 8px",borderRadius:"8px",
+    background:danger?"var(--danger-bg)":"var(--warning-bg)",
+    color:danger?"var(--danger)":"var(--warning)",
+    border:"1px solid "+(danger?"rgba(255,92,92,.3)":"rgba(251,191,36,.3)")}},label);
+}
+function qtyColor(it){
+  const q=it.quantity||0;
+  return q===0?"var(--danger)":isLowStock(it)?"var(--warning)":"var(--accent)";
+}
+
 function renderItemsList(c,whId,items,wrap){
   const listContainer=c.querySelector('#itemsList');
   if(!listContainer)return;
@@ -1231,6 +1253,8 @@ function renderItemsList(c,whId,items,wrap){
   }else{
     filtered=[...filtered].sort((a,b)=>(a[1].order||0)-(b[1].order||0));
   }
+  if(lowFilter)filtered=filtered.filter(([,it])=>(it.quantity||0)===0||isLowStock(it));
+  const lowCount=items.filter(([,it])=>(it.quantity||0)===0||isLowStock(it)).length;
 
   // Check if we can do an in-place update (same items, same order)
   const existingCards=listContainer.querySelectorAll('[data-item-id]');
@@ -1252,11 +1276,21 @@ function renderItemsList(c,whId,items,wrap){
       const qtyEl=card.querySelector('.item-qty');
       if(qtyEl&&qtyEl.textContent!==String(item.quantity||0)){
         qtyEl.textContent=String(item.quantity||0);
-        qtyEl.style.color=item.quantity===0?"var(--danger)":"var(--accent)";
         // Brief flash animation
         qtyEl.style.transition="transform 0.15s";
         qtyEl.style.transform="scale(1.2)";
         setTimeout(()=>{qtyEl.style.transform="scale(1)"},150);
+      }
+      if(qtyEl){
+        qtyEl.style.color=qtyColor(item);
+        const qrow=card.querySelector('.item-qty-row');
+        const oldChip=qrow?qrow.querySelector('.stock-chip'):null;
+        const fresh=stockChip(item);
+        const desired=fresh?fresh.textContent:null;
+        if((oldChip?oldChip.textContent:null)!==desired){
+          if(oldChip)oldChip.remove();
+          if(fresh&&qrow)qrow.appendChild(fresh);
+        }
       }
       const nameEl=card.querySelector('.item-name');
       if(nameEl&&nameEl.textContent!==item.name)nameEl.textContent=item.name;
@@ -1286,6 +1320,12 @@ function renderItemsList(c,whId,items,wrap){
         }
       }else if(noteEl)noteEl.remove();
     });
+    const lb=listContainer.querySelector('#lowBanner');
+    if(lb){
+      const txt=lb.querySelector('.low-banner-text');
+      if(txt)txt.textContent=`${lowCount} פריטים בחוסר או במלאי נמוך`;
+      lb.style.display=(lowCount>0||lowFilter)?"flex":"none";
+    }
     return;
   }
 
@@ -1301,6 +1341,17 @@ function renderItemsList(c,whId,items,wrap){
     }},"שמור");
     saveBar.appendChild(doneBtn);
     listContainer.appendChild(saveBar);
+  }
+
+  {
+    const lb=el("div",{id:"lowBanner",style:{display:(lowCount>0||lowFilter)?"flex":"none",alignItems:"center",gap:"8px",
+      background:lowFilter?"var(--warning-bg)":"var(--card)",
+      border:"1px solid "+(lowFilter?"rgba(251,191,36,.45)":"var(--border)"),
+      borderRadius:"12px",padding:"9px 14px",marginBottom:"10px",cursor:"pointer",fontSize:"13px",color:"var(--warning)"},
+      onClick:()=>{lowFilter=!lowFilter;renderItemsList(c,whId,items,wrap)}});
+    lb.appendChild(el("span",{className:"low-banner-text",style:{flex:"1",fontWeight:"500"}},`${lowCount} פריטים בחוסר או במלאי נמוך`));
+    lb.appendChild(el("span",{style:{fontSize:"12px",color:"var(--text-sec)"}},lowFilter?"הצג הכל":"הצג רק אותם"));
+    listContainer.appendChild(lb);
   }
 
   if(filtered.length===0&&items.length>0){
@@ -1501,8 +1552,9 @@ function renderItemsList(c,whId,items,wrap){
     if(currentWhData?.features?.showSku!==false&&item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
     if(item.note){info.appendChild(el("div",{className:"note-text item-note"},item.note))}
     const qr=el("div",{className:"item-qty-row",style:{display:"flex",alignItems:"center",gap:"8px",marginTop:"4px"}});
-    qr.appendChild(el("span",{className:"item-qty",style:{fontSize:"24px",fontWeight:"700",fontVariantNumeric:"tabular-nums",color:item.quantity===0?"var(--danger)":"var(--accent)"}},String(item.quantity||0)));
+    qr.appendChild(el("span",{className:"item-qty",style:{fontSize:"24px",fontWeight:"700",fontVariantNumeric:"tabular-nums",color:qtyColor(item)}},String(item.quantity||0)));
     qr.appendChild(el("span",{style:{fontSize:"12px",color:"var(--text-muted)"}},"יחידות"));
+    const chip=stockChip(item);if(chip)qr.appendChild(chip);
     info.appendChild(qr);
 
     const actions=el("div",{style:{display:"flex",gap:"2px",alignItems:"center",flexShrink:"0",marginRight:"8px"}});
@@ -1692,9 +1744,10 @@ function showNewItemModal(parent,whId){
     m.appendChild(el("h3",{style:{marginBottom:"16px"}},"פריט חדש"));
     const ni=el("input",{className:"app-input",placeholder:"שם הפריט (למשל: חולצה)",style:{marginBottom:"12px"}});
     const qi=el("input",{className:"app-input",placeholder:"כמות התחלתית (ברירת מחדל: 0)",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
+    const lowInput=el("input",{className:"app-input",placeholder:"סף התראת מלאי נמוך (אופציונלי)",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
     const skuInput=el("input",{className:"app-input",placeholder:'מק"ט (אופציונלי)',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off",style:{marginBottom:"12px"}});
     const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
-    m.append(ni,qi,skuInput,noteInput);
+    m.append(ni,qi,lowInput,skuInput,noteInput);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const ab=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
@@ -1706,10 +1759,12 @@ function showNewItemModal(parent,whId){
         history:{[genId()]:{action:"נוצר",amount:qty,by:currentUser.displayName,date:new Date().toISOString()}}};
       if(skuInput.value.trim())itemData.sku=skuInput.value.trim();
       if(noteInput.value.trim())itemData.note=noteInput.value.trim();
+      if(parseInt(lowInput.value)>0)itemData.lowStock=parseInt(lowInput.value);
       await dbSet(`warehouses/${whId}/items/${genId()}`,itemData);close();
     }},"הוסף פריט");btns.appendChild(ab);m.appendChild(btns);
     ni.addEventListener("keydown",e=>{if(e.key==="Enter")qi.focus()});
-    qi.addEventListener("keydown",e=>{if(e.key==="Enter")skuInput.focus()});
+    qi.addEventListener("keydown",e=>{if(e.key==="Enter")lowInput.focus()});
+    lowInput.addEventListener("keydown",e=>{if(e.key==="Enter")skuInput.focus()});
     skuInput.addEventListener("keydown",e=>{if(e.key==="Enter")ab.click()});
     setTimeout(()=>ni.focus(),100);
   });
@@ -1803,11 +1858,13 @@ function showEditItemModal(parent,whId,itemId,item){
     ni.value=item.name;
     const qi=el("input",{className:"app-input",placeholder:"כמות",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
     qi.value=item.quantity||0;
+    const lowInput=el("input",{className:"app-input",placeholder:"סף התראת מלאי נמוך (אופציונלי)",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
+    lowInput.value=item.lowStock||"";
     const skuInput=el("input",{className:"app-input",placeholder:'מק"ט (אופציונלי)',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off",style:{marginBottom:"12px"}});
     skuInput.value=item.sku||"";
     const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
     noteInput.value=item.note||"";
-    m.append(ni,qi,skuInput,noteInput);
+    m.append(ni,qi,lowInput,skuInput,noteInput);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const sb=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
@@ -1816,6 +1873,7 @@ function showEditItemModal(parent,whId,itemId,item){
         [`items/${itemId}/name`]:name,
         [`items/${itemId}/sku`]:skuInput.value.trim()||null,
         [`items/${itemId}/note`]:noteInput.value.trim()||null,
+        [`items/${itemId}/lowStock`]:parseInt(lowInput.value)>0?parseInt(lowInput.value):null,
       };
       if(imageChanged){upd[`items/${itemId}/thumb`]=pendingThumb;upd[`items/${itemId}/image`]=null;}
       const nq=parseInt(qi.value);
@@ -1832,7 +1890,8 @@ function showEditItemModal(parent,whId,itemId,item){
     }},"שמור");
     btns.appendChild(sb);m.appendChild(btns);
     ni.addEventListener("keydown",e=>{if(e.key==="Enter")qi.focus()});
-    qi.addEventListener("keydown",e=>{if(e.key==="Enter")skuInput.focus()});
+    qi.addEventListener("keydown",e=>{if(e.key==="Enter")lowInput.focus()});
+    lowInput.addEventListener("keydown",e=>{if(e.key==="Enter")skuInput.focus()});
     skuInput.addEventListener("keydown",e=>{if(e.key==="Enter")sb.click()});
     setTimeout(()=>{ni.focus();ni.select()},100);
   });
