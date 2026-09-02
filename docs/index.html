@@ -542,6 +542,8 @@ function renderAuth(){
       }
     }catch(e){fail("שגיאה בחיבור — נסה שוב")}
   }},"התחבר");
+  ni.addEventListener("keydown",e=>{if(e.key==="Enter")ui.focus()});
+  ui.addEventListener("keydown",e=>{if(e.key==="Enter")pi.focus()});
   pi.addEventListener("keydown",e=>{if(e.key==="Enter")ab.click()});
   box.append(nr,ui,pi,err,ab);wrap.appendChild(box);render(wrap);ui.focus();
 }
@@ -2022,6 +2024,7 @@ function showNewListModal(parent){
       const whId=genId();
       await dbSet(`warehouses/${whId}`,{name:inp.value.trim(),owner:currentUser.username,members:{[currentUser.username]:true},createdAt:new Date().toISOString()});
       await dbSet(`users/${currentUser.username}/warehouses/${whId}`,Date.now());close();
+      showNotice(`המחסן "${inp.value.trim()}" נוצר`);
     }},"צור מחסן");btns.appendChild(cb);m.appendChild(btns);
     inp.addEventListener("keydown",e=>{if(e.key==="Enter")cb.click()});setTimeout(()=>inp.focus(),100);
   });
@@ -2030,16 +2033,24 @@ function showNewListModal(parent){
 function showNewItemModal(parent,whId){
   showModal(parent,(m,close)=>{
     m.appendChild(el("h3",{style:{marginBottom:"16px"}},"פריט חדש"));
-    const ni=el("input",{className:"app-input",placeholder:"שם הפריט (למשל: חולצה)",style:{marginBottom:"12px"}});
+    const ni=el("input",{className:"app-input",placeholder:"שם הפריט (למשל: חולצה)",style:{marginBottom:"4px"}});
+    // Live duplicate check against this warehouse's items.
+    const dupWarn=el("p",{style:{fontSize:"12px",color:"var(--warning)",minHeight:"16px",margin:"0 0 6px"}});
+    const findDup=()=>{const k=ni.value.trim().toLowerCase();return k?currentItems.find(([,it])=>(it.name||"").trim().toLowerCase()===k):null};
+    let dupAcknowledged=false;
+    ni.addEventListener("input",()=>{const d=findDup();dupAcknowledged=false;dupWarn.textContent=d?`⚠ כבר קיים פריט בשם "${d[1].name}" (כמות: ${d[1].quantity||0})`:"";ab.textContent="הוסף פריט"});
     const qi=el("input",{className:"app-input",placeholder:"כמות התחלתית (ברירת מחדל: 0)",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
     const lowInput=el("input",{className:"app-input",placeholder:"סף התראת מלאי נמוך (אופציונלי)",type:"number",inputMode:"numeric",style:{marginBottom:"12px",display:lowStockOn()?"":"none"}});
     const skuInput=el("input",{className:"app-input",placeholder:'מק"ט (אופציונלי)',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off",style:{marginBottom:"12px"}});
     const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
-    m.append(ni,qi,lowInput,skuInput,noteInput);
+    m.append(ni,dupWarn,qi,lowInput,skuInput,noteInput);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const ab=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
-      if(!ni.value.trim())return;ab.disabled=true;const qty=parseInt(qi.value)||0;
+      if(!ni.value.trim())return;
+      // Soft block: first tap on a duplicate name just asks for confirmation.
+      if(findDup()&&!dupAcknowledged){dupAcknowledged=true;ab.textContent="הוסף בכל זאת";return}
+      ab.disabled=true;const qty=parseInt(qi.value)||0;
       // Order = timestamp: always larger than the 1..n values manual reorder
       // writes, so new items land at the bottom — and two devices adding at
       // the same moment can't collide the way read-max-then-write did.
@@ -2049,6 +2060,7 @@ function showNewItemModal(parent,whId){
       if(noteInput.value.trim())itemData.note=noteInput.value.trim();
       if(parseInt(lowInput.value)>0)itemData.lowStock=parseInt(lowInput.value);
       await dbSet(`warehouses/${whId}/items/${genId()}`,itemData);close();
+      showNotice(`"${itemData.name}" נוסף`);
     }},"הוסף פריט");btns.appendChild(ab);m.appendChild(btns);
     ni.addEventListener("keydown",e=>{if(e.key==="Enter")qi.focus()});
     qi.addEventListener("keydown",e=>{if(e.key==="Enter")lowInput.focus()});
@@ -2090,6 +2102,7 @@ function showAdjustModal(parent,whId,itemId,item,mode){
         [`items/${itemId}/history/${genId()}`]:{action:cm==="add"?"הוספה":"הורדה",amount:Math.abs(delta),result:nq,by:currentUser.displayName,date:new Date().toISOString()}
       });
       close();
+      showNotice(`${item.name}: ${nq} יחידות`);
     }},cm==="add"?"הוסף":"הורד");btns.appendChild(ab);m.appendChild(btns);
     qi.addEventListener("keydown",e=>{if(e.key==="Enter")ab.click()});setTimeout(()=>qi.focus(),100);
   });
@@ -2142,8 +2155,10 @@ function showEditItemModal(parent,whId,itemId,item){
     imgRow.append(imgSlot,imgBtns);
     m.append(imgRow,fileInput);
 
-    const ni=el("input",{className:"app-input",placeholder:"שם הפריט",style:{marginBottom:"12px"}});
+    const ni=el("input",{className:"app-input",placeholder:"שם הפריט",style:{marginBottom:"4px"}});
     ni.value=item.name;
+    const dupWarn=el("p",{style:{fontSize:"12px",color:"var(--warning)",minHeight:"16px",margin:"0 0 6px"}});
+    ni.addEventListener("input",()=>{const k=ni.value.trim().toLowerCase();const d=k?currentItems.find(([id,it])=>id!==itemId&&(it.name||"").trim().toLowerCase()===k):null;dupWarn.textContent=d?`⚠ כבר קיים פריט אחר בשם "${d[1].name}"`:""});
     const qi=el("input",{className:"app-input",placeholder:"כמות",type:"number",inputMode:"numeric",style:{marginBottom:"12px"}});
     qi.value=item.quantity||0;
     const lowInput=el("input",{className:"app-input",placeholder:"סף התראת מלאי נמוך (אופציונלי)",type:"number",inputMode:"numeric",style:{marginBottom:"12px",display:lowStockOn()?"":"none"}});
@@ -2152,7 +2167,7 @@ function showEditItemModal(parent,whId,itemId,item){
     skuInput.value=item.sku||"";
     const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
     noteInput.value=item.note||"";
-    m.append(ni,qi,lowInput,skuInput,noteInput);
+    m.append(ni,dupWarn,qi,lowInput,skuInput,noteInput);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const sb=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
@@ -2175,6 +2190,7 @@ function showEditItemModal(parent,whId,itemId,item){
         else await dbRemove(`itemImages/${whId}/${itemId}`);
       }
       close();
+      showNotice("השינויים נשמרו");
     }},"שמור");
     btns.appendChild(sb);m.appendChild(btns);
     ni.addEventListener("keydown",e=>{if(e.key==="Enter")qi.focus()});
