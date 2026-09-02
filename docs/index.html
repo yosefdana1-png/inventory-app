@@ -555,6 +555,29 @@ function sortedWhIds(data){
   return entries.map(([id])=>id);
 }
 
+// Category chips on the home screen. Categories are personal (stored under the
+// user's own node), so everyone organizes THEIR list without affecting others.
+// Chips derive from categories actually assigned to current warehouses.
+function renderCatChips(){
+  const c=cachedHomeContent;if(!c)return;
+  let bar=c.querySelector('#catChips');
+  const cats=[...new Set(lastHomeWhIds.map(id=>whCategories[id]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"he"));
+  if(!cats.length){if(bar)bar.remove();catFilter=null;return}
+  if(catFilter&&!cats.includes(catFilter))catFilter=null;
+  if(!bar){bar=el("div",{id:"catChips",style:{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"12px"}});c.insertBefore(bar,c.firstChild)}
+  bar.innerHTML="";
+  const mk=(label,val)=>el("button",{className:"toolbar-btn"+((catFilter===val)?" active":""),onClick:()=>{catFilter=val;renderCatChips();applyCatFilter()}},label);
+  bar.appendChild(mk("הכל",null));
+  cats.forEach(cat=>bar.appendChild(mk(cat,cat)));
+}
+function applyCatFilter(){
+  const cont=document.getElementById('warehouseCards');if(!cont)return;
+  [...cont.children].forEach(w=>{
+    const id=w.id&&w.id.indexOf("wh-")===0?w.id.slice(3):null;
+    w.style.display=(!catFilter||whCategories[id]===catFilter)?"":"none";
+  });
+}
+
 function attachHomeWarehouseListener(content,screen){
   processPendingJoin();
   homeUnsubs.forEach(f=>f());homeUnsubs=[];
@@ -566,8 +589,13 @@ function attachHomeWarehouseListener(content,screen){
   const u=dbListenCached(`users/${currentUser.username}/warehouses`,data=>{
     lastHomeWhIds=sortedWhIds(data);
     renderWarehouseList(content,lastHomeWhIds,screen);
+    renderCatChips();applyCatFilter();
   });
-  homeUnsubs.push(u);unsubscribers.push(u);
+  const u2=dbListenCached(`users/${currentUser.username}/whCategories`,data=>{
+    whCategories=data||{};
+    renderCatChips();applyCatFilter();
+  });
+  homeUnsubs.push(u,u2);unsubscribers.push(u,u2);
   return u;
 }
 
@@ -592,6 +620,7 @@ function renderHome(){
   rb.appendChild(icon("refresh",18));
   const sortWhBtn=el("button",{className:"icon-btn",style:{color:"var(--text-sec)"},onClick:()=>{
     whReorderMode=!whReorderMode;
+    if(whReorderMode&&catFilter){catFilter=null;renderCatChips();applyCatFilter()}
     sortWhBtn.style.color=whReorderMode?"var(--accent)":"var(--text-sec)";
     currentWhIds=[];
     renderWarehouseList(content,lastHomeWhIds,wrap);
@@ -669,6 +698,7 @@ function renderWarehouseList(c,whIds,wrap){
       whCardListeners.push(unsub);
     }
   });
+  applyCatFilter();
 }
 
 function buildWarehouseCard(cardWrapper,whId,wh,wrap){
@@ -851,6 +881,7 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
         menuOpts.push({label:"שלח עותק למשתמש",value:"copy"});
       }
       menuOpts.push({label:"שכפל מחסן",value:"duplicate"});
+      menuOpts.push({label:whCategories[whId]?`קטגוריה: ${whCategories[whId]}`:"קטגוריה",value:"category"});
       menuOpts.push({label:isOwner?"מחק מחסן":"עזוב מחסן",style:"danger",value:"delete"});
       const choice=await showActionSheet(menuOpts);
       if(choice==="export"){
@@ -898,6 +929,35 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
           await dbSet(`users/${currentUser.username}/warehouses/${newWhId}`,Date.now());
           showNotice(`נוצר עותק: "${newWh.name}"`);
         }catch(e){showNotice("שגיאה בשכפול — נסה שוב")}
+      }
+      else if(choice==="category"){
+        const cats=[...new Set(lastHomeWhIds.map(id=>whCategories[id]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"he"));
+        const cur=whCategories[whId]||null;
+        const opts=cats.map(cat=>({label:(cat===cur?"✓ ":"")+cat,value:"set:"+cat}));
+        opts.push({label:"קטגוריה חדשה...",value:"new"});
+        if(cur)opts.push({label:"הסר מהקטגוריה",style:"danger",value:"clear"});
+        const c2=await showActionSheet(opts,`קטגוריה עבור "${wh.name}" (אישי — רק אצלך)`);
+        if(!c2)return;
+        if(c2==="new"){
+          showModal(wrap,(m,close)=>{
+            m.appendChild(el("h3",{style:{marginBottom:"16px"}},"קטגוריה חדשה"));
+            const inp=el("input",{className:"app-input",placeholder:'שם הקטגוריה (למשל: "בית")'});m.appendChild(inp);
+            const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
+            btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
+            const ok=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
+              const name=inp.value.trim();if(!name)return;ok.disabled=true;
+              await dbSet(`users/${currentUser.username}/whCategories/${whId}`,name);
+              close();
+            }},"שמור");
+            btns.appendChild(ok);m.appendChild(btns);
+            inp.addEventListener("keydown",e=>{if(e.key==="Enter")ok.click()});
+            setTimeout(()=>inp.focus(),100);
+          });
+        }else if(c2==="clear"){
+          await dbRemove(`users/${currentUser.username}/whCategories/${whId}`);
+        }else if(c2.indexOf("set:")===0){
+          await dbSet(`users/${currentUser.username}/whCategories/${whId}`,c2.slice(4));
+        }
       }
       else if(choice==="share")showShareModal(wrap,whId,wh);
       else if(choice==="copy")showCopyWarehouseModal(wrap,whId,wh);
@@ -983,6 +1043,8 @@ let whTouchDrag=null;
 let pendingListRender=false; // a list re-render deferred because a touch drag was active
 let pendingWhRender=false;   // same, for the home warehouse list
 let lastHomeWhIds=[];
+let whCategories={}; // PERSONAL warehouse categories: whId -> name (users/<me>/whCategories)
+let catFilter=null;  // active category chip on the home screen
 let userWarehouseRole='member';
 let currentWhData=null;
 
@@ -2783,7 +2845,7 @@ function showSettingsModal(parent){
       homeUnsubs.forEach(f=>f());homeUnsubs=[];
       whCardListeners.forEach(f=>f());whCardListeners=[];
       currentUser=null;homeScreen=null;cachedHomeContent=null;
-      currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;
+      currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;whCategories={};catFilter=null;
       cacheClearAll();localStorage.removeItem("inv_user");
       if(FB&&FB.auth)try{FB.signOut(FB.auth)}catch(e){}
       close();renderAuth();
