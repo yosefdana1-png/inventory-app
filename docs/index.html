@@ -110,8 +110,7 @@
     .item-card.drag-active{transition:none!important}
     [data-wh-id].drag-over .list-card{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
     .icon-btn{background:none;border:none;color:var(--text-sec);cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center}
-    .qty-btn{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-    .qty-btn:active{transform:scale(.92)}
+    .qty-btn{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
     .qty-btn-add{background:var(--success-bg);border:1px solid rgba(52,211,153,.2);color:var(--success)}
     .qty-btn-sub{background:var(--danger-bg);border:1px solid rgba(255,92,92,.2);color:var(--danger)}
     .fab{position:fixed;bottom:calc(28px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:60px;height:60px;border-radius:18px;background:var(--accent);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(79,140,255,.4);z-index:90}
@@ -294,69 +293,6 @@ function dbListenCached(p,cb){
   unsubscribers.push(u);return u;
 }
 function render(s){const a=$("#app");a.innerHTML="";a.appendChild(s)}
-
-// ═══════════ QUICK QUANTITY ADJUST ═══════════
-// A tap on a card's +/- changes the quantity by 1 immediately (optimistic UI).
-// Rapid taps are BATCHED: the DB write (atomic increment) and a single history
-// entry go out only after 800ms of quiet, so "+5" is five taps but one history
-// line. A long-press opens the full adjust modal for big amounts.
-const qtyPending={}; // itemId -> {whId, delta, timer}
-function flushQuickAdjust(itemId){
-  const p=qtyPending[itemId];
-  delete qtyPending[itemId];
-  if(!p||!p.delta)return;
-  const entry=currentItems.find(([id])=>id===itemId);
-  const h={action:p.delta>0?"הוספה":"הורדה",amount:Math.abs(p.delta),by:currentUser.displayName,date:new Date().toISOString()};
-  if(entry)h.result=entry[1].quantity||0;
-  dbUpdate(`warehouses/${p.whId}`,{
-    [`items/${itemId}/quantity`]:FB.increment(p.delta),
-    [`items/${itemId}/history/${genId()}`]:h
-  }).catch(()=>{});
-}
-function quickAdjust(whId,itemId,dir){
-  const entry=currentItems.find(([id])=>id===itemId);
-  if(!entry)return;
-  const it=entry[1];
-  const cur=it.quantity||0;
-  if(dir<0&&cur<=0)return; // never below zero
-  it.quantity=cur+dir;
-  const qtyEl=document.querySelector(`[data-item-id="${itemId}"] .item-qty`);
-  if(qtyEl){
-    qtyEl.textContent=String(it.quantity);
-    qtyEl.style.color=it.quantity===0?"var(--danger)":"var(--accent)";
-  }
-  let p=qtyPending[itemId];
-  if(!p)p=qtyPending[itemId]={whId,delta:0,timer:null};
-  p.delta+=dir;
-  if(p.timer)clearTimeout(p.timer);
-  if(p.delta===0){delete qtyPending[itemId];return} // +1 then -1 cancels out
-  p.timer=setTimeout(()=>flushQuickAdjust(itemId),800);
-}
-// Don't lose batched taps if the app is backgrounded/closed before the flush.
-document.addEventListener("visibilitychange",()=>{
-  if(document.visibilityState==="hidden"){
-    Object.keys(qtyPending).forEach(id=>{
-      const p=qtyPending[id];
-      if(p&&p.timer)clearTimeout(p.timer);
-      flushQuickAdjust(id);
-    });
-  }
-});
-// Tap vs long-press wiring for a +/- button.
-function bindQtyButton(btn,onTap,onLong){
-  let timer=null,longFired=false;
-  const start=()=>{longFired=false;if(timer)clearTimeout(timer);timer=setTimeout(()=>{longFired=true;onLong()},500)};
-  const cancel=()=>{if(timer){clearTimeout(timer);timer=null}};
-  btn.addEventListener("touchstart",start,{passive:true});
-  btn.addEventListener("touchend",cancel);
-  btn.addEventListener("touchmove",cancel,{passive:true});
-  btn.addEventListener("touchcancel",cancel);
-  btn.addEventListener("mousedown",e=>{if(e.button===0)start()});
-  btn.addEventListener("mouseup",cancel);
-  btn.addEventListener("mouseleave",cancel);
-  btn.addEventListener("contextmenu",e=>e.preventDefault()); // Android long-press menu
-  btn.addEventListener("click",e=>{e.stopPropagation();if(longFired){longFired=false;return}onTap()});
-}
 
 // ═══════════ UNDO TOAST ═══════════
 // A short-lived "בטל" bar after destructive actions. One at a time — a new
@@ -1512,12 +1448,8 @@ function renderItemsList(c,whId,items,wrap){
     const actions=el("div",{style:{display:"flex",gap:"2px",alignItems:"center",flexShrink:"0",marginRight:"8px"}});
     if(!reorderMode){
       const canEdit=memberCan('edit');
-      // Tap = quick ±1 (batched write); long-press = the full adjust modal.
-      const freshItem=()=>{const e2=currentItems.find(([id])=>id===itemId);return e2?e2[1]:item};
-      const sb=el("button",{className:"qty-btn qty-btn-sub",style:{width:"36px",height:"36px"}});sb.appendChild(icon("minus",18));
-      bindQtyButton(sb,()=>quickAdjust(whId,itemId,-1),()=>showAdjustModal(wrap,whId,itemId,freshItem(),"remove"));
-      const ab=el("button",{className:"qty-btn qty-btn-add",style:{width:"36px",height:"36px"}});ab.appendChild(icon("plus",18));
-      bindQtyButton(ab,()=>quickAdjust(whId,itemId,1),()=>showAdjustModal(wrap,whId,itemId,freshItem(),"add"));
+      const sb=el("button",{className:"qty-btn qty-btn-sub",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"remove")});sb.appendChild(icon("minus",18));
+      const ab=el("button",{className:"qty-btn qty-btn-add",style:{width:"36px",height:"36px"},onClick:()=>showAdjustModal(wrap,whId,itemId,item,"add")});ab.appendChild(icon("plus",18));
       const mb=el("button",{className:"icon-btn",style:{color:"var(--text-muted)",padding:"6px"},onClick:async()=>{
         // Cards update in place without rebuilding, so the closure's `item` can be
         // stale (e.g. built from image-stripped cache) — refresh from currentItems.
