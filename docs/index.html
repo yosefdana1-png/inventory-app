@@ -123,7 +123,7 @@
     .history-row+.history-row{border-top:1px solid var(--border)}
     .spinning{animation:spin .6s linear}.shaking{animation:shake .5s ease}.screen{background:var(--bg);min-height:100vh;min-height:100dvh;height:100vh;height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch}
     .tab-bar{display:flex;gap:4px;background:var(--surface);border-radius:12px;padding:4px;border:1px solid var(--border);margin-bottom:16px}
-    .tab-btn{flex:1;padding:10px;border-radius:10px;border:none;background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;transition:all .2s}
+    .tab-btn{flex:1;padding:9px 4px;border-radius:10px;border:none;background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;transition:all .2s;white-space:nowrap}
     .tab-btn.active{background:var(--accent);color:#fff}
     .user-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px 4px 8px;background:var(--accent-glow);border:1px solid rgba(79,140,255,.2);border-radius:20px;font-size:13px;color:var(--accent)}
     .shared-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:var(--warning-bg);border:1px solid rgba(251,191,36,.2);border-radius:8px;font-size:11px;color:var(--warning);margin-top:4px}
@@ -148,6 +148,9 @@
     .toolbar-btn:hover,.toolbar-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
     .toolbar-btn.danger-hover:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
     .note-text{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .cat-chip{padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text-sec);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,color .15s,border-color .15s;white-space:nowrap;flex-shrink:0}
+    .cat-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+    .cat-chip:active{transform:scale(.96)}
     .drag-handle{cursor:grab;touch-action:none;color:var(--text-muted);padding:4px}
     .drag-handle:active{cursor:grabbing}
     .undo-toast{position:fixed;bottom:calc(104px + env(safe-area-inset-bottom));left:16px;right:16px;z-index:4000;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px 12px 12px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,.55);animation:fadeIn .2s ease}
@@ -559,7 +562,14 @@ function sortedWhIds(data){
 // user's own node), so everyone organizes THEIR list without affecting others.
 // Chips derive from categories actually assigned to current warehouses.
 function currentCats(){
-  return [...new Set(lastHomeWhIds.map(id=>whCategories[id]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"he"));
+  const cats=[...new Set(lastHomeWhIds.map(id=>whCategories[id]).filter(Boolean))];
+  return cats.sort((a,b)=>{
+    const ia=catOrder.indexOf(a),ib=catOrder.indexOf(b);
+    if(ia===-1&&ib===-1)return a.localeCompare(b,"he");
+    if(ia===-1)return 1;
+    if(ib===-1)return -1;
+    return ia-ib;
+  });
 }
 function showCategoryNameModal(whId,initial){
   if(!homeScreen)return;
@@ -597,39 +607,98 @@ async function startAddCategory(){
   const whId=await showActionSheet(opts,"לאיזה מחסן לשייך את הקטגוריה?");
   if(whId)showCategoryNameModal(whId,null);
 }
-async function manageCategoriesSheet(){
-  const cats=currentCats();
-  if(!cats.length){showNotice("אין קטגוריות עדיין");return}
-  const cat=await showActionSheet(cats.map(x=>({label:x,value:x})),"בחר קטגוריה לעריכה");
-  if(!cat)return;
-  const act=await showActionSheet([
-    {label:"שנה שם",value:"rename"},
-    {label:"מחק קטגוריה (המחסנים נשארים)",style:"danger",value:"del"},
-  ],`"${cat}"`);
-  if(act==="rename")showCategoryNameModal(null,cat);
-  else if(act==="del"){
-    const upd={};
-    Object.entries(whCategories).forEach(([id,v])=>{if(v===cat)upd[id]=null});
-    await dbUpdate(`users/${currentUser.username}/whCategories`,upd);
-    if(catFilter===cat)catFilter=null;
-  }
+// One management screen: inline rename, one-tap delete (with undo), and
+// up/down reordering — replaces the old multi-sheet flow.
+function manageCategoriesSheet(){
+  if(!homeScreen)return;
+  showModal(homeScreen,(m,close)=>{
+    m.appendChild(el("h3",{style:{marginBottom:"14px"}},"ניהול קטגוריות"));
+    const listWrap=el("div");
+    m.appendChild(listWrap);
+    function redraw(){
+      listWrap.innerHTML="";
+      const cats=currentCats();
+      if(!cats.length){
+        listWrap.appendChild(el("p",{style:{color:"var(--text-muted)",fontSize:"14px",textAlign:"center",padding:"18px 0"}},"אין קטגוריות עדיין"));
+        return;
+      }
+      cats.forEach((cat,i)=>{
+        const row=el("div",{style:{display:"flex",alignItems:"center",gap:"4px",padding:"8px 12px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"12px",marginBottom:"8px"}});
+        const count=Object.values(whCategories).filter(v=>v===cat).length;
+        const nameWrap=el("div",{style:{flex:"1",minWidth:"0"}});
+        nameWrap.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},cat));
+        nameWrap.appendChild(el("div",{style:{fontSize:"11px",color:"var(--text-muted)"}},`${count} מחסנים`));
+        row.appendChild(nameWrap);
+        const mkIcon=(name,fn,danger)=>{const b=el("button",{className:"icon-btn",style:{padding:"7px",color:danger?"var(--danger)":"var(--text-sec)"},onClick:fn});b.appendChild(icon(name,16));return b};
+        const move=async dir=>{
+          const arr=currentCats();
+          const j=i+dir;if(j<0||j>=arr.length)return;
+          [arr[i],arr[j]]=[arr[j],arr[i]];
+          catOrder=arr;
+          redraw();renderCatChips();
+          await dbSet(`users/${currentUser.username}/catOrder`,arr).catch(()=>{});
+        };
+        const upB=mkIcon("up",()=>move(-1));if(i===0)upB.style.visibility="hidden";
+        const downB=mkIcon("down",()=>move(1));if(i===cats.length-1)downB.style.visibility="hidden";
+        row.append(upB,downB);
+        row.appendChild(mkIcon("edit",()=>{
+          const inp=el("input",{className:"app-input",style:{flex:"1",padding:"8px 10px",fontSize:"14px"}});
+          inp.value=cat;
+          const save=async()=>{
+            const name=inp.value.trim();
+            if(!name||name===cat){redraw();return}
+            const upd={};Object.entries(whCategories).forEach(([id,v])=>{if(v===cat)upd[id]=name});
+            Object.keys(upd).forEach(id=>{whCategories[id]=name});
+            catOrder=catOrder.length?catOrder.map(x=>x===cat?name:x):currentCats();
+            if(catFilter===cat)catFilter=name;
+            redraw();renderCatChips();applyCatFilter();
+            await dbUpdate(`users/${currentUser.username}/whCategories`,upd).catch(()=>{});
+            await dbSet(`users/${currentUser.username}/catOrder`,catOrder).catch(()=>{});
+          };
+          row.innerHTML="";
+          row.append(inp,el("button",{className:"btn btn-primary btn-sm",onClick:save},"שמור"));
+          inp.addEventListener("keydown",e=>{if(e.key==="Enter")save()});
+          setTimeout(()=>{inp.focus();inp.select()},50);
+        }));
+        row.appendChild(mkIcon("trash",async()=>{
+          const restore={};
+          Object.entries(whCategories).forEach(([id,v])=>{if(v===cat)restore[id]=v});
+          const upd={};Object.keys(restore).forEach(id=>{upd[id]=null;delete whCategories[id]});
+          catOrder=catOrder.filter(x=>x!==cat);
+          if(catFilter===cat){catFilter=null}
+          redraw();renderCatChips();applyCatFilter();
+          await dbUpdate(`users/${currentUser.username}/whCategories`,upd).catch(()=>{});
+          await dbSet(`users/${currentUser.username}/catOrder`,catOrder).catch(()=>{});
+          showUndoToast(`הקטגוריה "${cat}" נמחקה`,async()=>{
+            Object.assign(whCategories,restore);
+            await dbUpdate(`users/${currentUser.username}/whCategories`,restore);
+            redraw();renderCatChips();applyCatFilter();
+          });
+        },true));
+        listWrap.appendChild(row);
+      });
+    }
+    redraw();
+    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"4px"},onClick:()=>{close();startAddCategory()}},"+ הוסף קטגוריה"));
+    m.appendChild(el("button",{className:"btn btn-primary",style:{width:"100%",marginTop:"12px"},onClick:close},"סגור"));
+  });
 }
 function renderCatChips(){
   const c=cachedHomeContent;if(!c)return;
   let bar=c.querySelector('#catChips');
   const cats=currentCats();
-  if(!bar){bar=el("div",{id:"catChips",style:{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"12px"}});c.insertBefore(bar,c.firstChild)}
+  if(!bar){bar=el("div",{id:"catChips",style:{display:"flex",gap:"8px",overflowX:"auto",WebkitOverflowScrolling:"touch",marginBottom:"12px",paddingBottom:"2px",scrollbarWidth:"none"}});c.insertBefore(bar,c.firstChild)}
   bar.innerHTML="";
   if(!cats.length){
     catFilter=null;
-    if(lastHomeWhIds.length)bar.appendChild(el("button",{className:"toolbar-btn",onClick:startAddCategory},"+ הוסף קטגוריה"));
+    if(lastHomeWhIds.length)bar.appendChild(el("button",{className:"cat-chip",onClick:startAddCategory},"+ הוסף קטגוריה"));
     return;
   }
   if(catFilter&&!cats.includes(catFilter))catFilter=null;
-  const mk=(label,val)=>el("button",{className:"toolbar-btn"+((catFilter===val)?" active":""),onClick:()=>{catFilter=val;renderCatChips();applyCatFilter()}},label);
+  const mk=(label,val)=>el("button",{className:"cat-chip"+((catFilter===val)?" active":""),onClick:()=>{catFilter=val;renderCatChips();applyCatFilter()}},label);
   bar.appendChild(mk("הכל",null));
   cats.forEach(cat=>bar.appendChild(mk(cat,cat)));
-  bar.appendChild(el("button",{className:"toolbar-btn",title:"הוסף קטגוריה",onClick:startAddCategory},"+"));
+  bar.appendChild(el("button",{className:"cat-chip",title:"הוסף קטגוריה",style:{fontWeight:"700"},onClick:startAddCategory},"+"));
 }
 function applyCatFilter(){
   const cont=document.getElementById('warehouseCards');if(!cont)return;
@@ -656,7 +725,11 @@ function attachHomeWarehouseListener(content,screen){
     whCategories=data||{};
     renderCatChips();applyCatFilter();
   });
-  homeUnsubs.push(u,u2);unsubscribers.push(u,u2);
+  const u3=dbListenCached(`users/${currentUser.username}/catOrder`,data=>{
+    catOrder=Array.isArray(data)?data:(data?Object.values(data):[]);
+    renderCatChips();
+  });
+  homeUnsubs.push(u,u2,u3);unsubscribers.push(u,u2,u3);
   return u;
 }
 
@@ -1093,6 +1166,7 @@ let pendingWhRender=false;   // same, for the home warehouse list
 let lastHomeWhIds=[];
 let whCategories={}; // PERSONAL warehouse categories: whId -> name (users/<me>/whCategories)
 let catFilter=null;  // active category chip on the home screen
+let catOrder=[];     // personal display order of category names (users/<me>/catOrder)
 let userWarehouseRole='member';
 let currentWhData=null;
 
@@ -2158,7 +2232,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
     }
     const tabs=isAdmin?['חברים','הרשאות','סידור','תצוגה']:['חברים'];
     const tabBar=el("div",{className:"tab-bar"});
-    const panelWrap=el("div",{style:{height:"320px",overflowY:"auto",direction:"ltr"}});
+    const panelWrap=el("div",{style:{maxHeight:"48vh",minHeight:"240px",overflowY:"auto",direction:"ltr"}});
     const panelEls={};
     tabs.forEach((t,i)=>{
       const panel=el("div",{style:{display:i===0?'block':'none',direction:"rtl",padding:"4px 0"}});
@@ -2294,6 +2368,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
     // ── הרשאות ──
     if(isAdmin&&panelEls['הרשאות']){
       const pp=panelEls['הרשאות'];
+      pp.appendChild(el("p",{style:{fontSize:"13px",color:"var(--text-sec)",marginBottom:"4px"}},"הגבלות על חברים רגילים — לא חלות על בעלים ומנהלים:"));
       const perms=wh.permissions||{};
       const permDefs=[
         {key:'restrict_add',label:'מנע הוספת פריטים לחברים'},
@@ -2328,6 +2403,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
     // ── תצוגה ──
     if(isAdmin&&panelEls['תצוגה']){
       const dp=panelEls['תצוגה'];
+      dp.appendChild(el("p",{style:{fontSize:"13px",color:"var(--text-sec)",marginBottom:"4px"}},"מה יוצג על כרטיסי הפריטים:"));
       const features=wh.features||{};
       function makeDisplayToggle(label,featKey,defaultOn){
         const on=features[featKey]!==false;
@@ -2894,7 +2970,7 @@ function showSettingsModal(parent){
       homeUnsubs.forEach(f=>f());homeUnsubs=[];
       whCardListeners.forEach(f=>f());whCardListeners=[];
       currentUser=null;homeScreen=null;cachedHomeContent=null;
-      currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;whCategories={};catFilter=null;
+      currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;whCategories={};catFilter=null;catOrder=[];
       cacheClearAll();localStorage.removeItem("inv_user");
       if(FB&&FB.auth)try{FB.signOut(FB.auth)}catch(e){}
       close();renderAuth();
