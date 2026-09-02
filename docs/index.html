@@ -2060,6 +2060,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
         {key:'restrict_reset',label:'מנע איפוס כמויות לחברים'},
         {key:'restrict_edit',label:'מנע עריכה ומחיקה לחברים'},
         {key:'restrict_share',label:'מנע שיתוף וצירוף חברים לחברים'},
+        {key:'restrict_code_renew',label:'מנע חידוש קוד הצטרפות לחברים'},
       ];
       permDefs.forEach(({key,label})=>{
         const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid var(--border)"}});
@@ -2228,7 +2229,9 @@ function showShareModal(parent,whId,wh){
       if(navigator.share){try{await navigator.share({text:`הצטרף למחסן "${wh.name}" באפליקציית ניהול מלאי:\n${qrWrap.dataset.url}`})}catch(e){}}
       else copyLinkBtn.click();
     }},"שתף");
-    const renewBtn=el("button",{className:"toolbar-btn danger-hover",onClick:async()=>{
+    const isAdminInWh=wh.owner===currentUser.username||(wh.roles&&wh.roles[currentUser.username]==='admin');
+    const canRenewCode=isAdminInWh||!(wh.permissions&&wh.permissions.restrict_code_renew);
+    const renewBtn=el("button",{className:"toolbar-btn danger-hover",style:{display:canRenewCode?"":"none"},onClick:async()=>{
       const c=await showActionSheet([{label:"צור קוד חדש (הקודים הישנים יפסיקו לעבוד)",style:"danger",value:"ok"}]);
       if(c!=="ok")return;
       const token=genId()+genId();
