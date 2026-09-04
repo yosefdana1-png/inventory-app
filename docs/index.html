@@ -188,21 +188,24 @@
   <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></symbol>
 </svg>
 
-<div id="app" style="height:100vh;height:100dvh">
-  <div style="display:flex;gap:6px;justify-content:center;padding:40vh 0">
-    <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out 0s infinite"></div>
-    <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out .2s infinite"></div>
-    <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out .4s infinite"></div>
+<div id="splash" style="position:fixed;inset:0;z-index:9000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .35s ease">
+  <img src="icon-192.png" alt="" style="width:96px;height:96px;border-radius:22px;box-shadow:0 12px 40px rgba(79,140,255,.25);animation:scaleIn .45s cubic-bezier(.2,.8,.2,1)">
+  <div style="font-size:20px;font-weight:600;letter-spacing:.2px">ניהול מלאי</div>
+  <div style="display:flex;gap:6px;margin-top:6px">
+    <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out 0s infinite"></div>
+    <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out .2s infinite"></div>
+    <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out .4s infinite"></div>
   </div>
 </div>
+<div id="app" style="height:100vh;height:100dvh"></div>
 
 <script>
 // ── Temporary boot-failure reporter: if anything throws before the first
 // screen renders, show it instead of the eternal loading dots. ──
 window.__bootErr=e=>{
   try{
-    var app=document.getElementById("app");
-    if(!app||app.querySelector(".screen"))return;
+    var app=document.getElementById("splash")||document.getElementById("app");
+    if(!app||document.querySelector("#app .screen"))return;
     var msg=(e&&(e.message||(e.reason&&(e.reason.message||e.reason.code))||e.type))||String(e);
     var src=(e&&e.filename)?e.filename.split("/").pop()+":"+e.lineno:"";
     var d=document.createElement("div");
@@ -215,8 +218,8 @@ window.addEventListener("error",window.__bootErr,true);
 window.addEventListener("unhandledrejection",window.__bootErr);
 setTimeout(()=>{
   try{
-    var app=document.getElementById("app");
-    if(app&&!app.querySelector(".screen")&&!app.querySelector("div[style*='monospace']")){
+    var app=document.getElementById("splash")||document.getElementById("app");
+    if(app&&!document.querySelector("#app .screen")&&!app.querySelector("div[style*='monospace']")){
       var d=document.createElement("div");
       d.style.cssText="padding:40px 24px;color:#fbbf24;font-size:13px;direction:ltr;text-align:left;font-family:monospace";
       d.textContent="BOOT STALL: no screen after 12s. FB="+(!!window.FB)+" auth="+(!!(window.FB&&window.FB.auth))+" user="+(function(){try{return !!localStorage.getItem("inv_user")}catch(e){return "ls-err"}})();
@@ -295,7 +298,13 @@ function dbListenCached(p,cb){
   });
   unsubscribers.push(u);return u;
 }
-function render(s){const a=$("#app");a.innerHTML="";a.appendChild(s)}
+const splashShownAt=Date.now();
+function hideSplash(){
+  const sp=document.getElementById("splash");if(!sp)return;
+  const wait=Math.max(0,500-(Date.now()-splashShownAt));
+  setTimeout(()=>{sp.style.opacity="0";sp.style.pointerEvents="none";setTimeout(()=>sp.remove(),400)},wait);
+}
+function render(s){const a=$("#app");a.innerHTML="";a.appendChild(s);hideSplash()}
 
 // ═══════════ JOIN-BY-QR ═══════════
 // A warehouse QR encodes APP_URL#join=<whId>.<inviteToken>. Scanning it with
@@ -395,6 +404,7 @@ function navInit(){
 function navShowHome(animated){
   const app=$("#app");
   if(!homeScreen)return;
+  hideSplash();
   
   if(!isShowingDetail||!animated){
     app.innerHTML="";
@@ -433,6 +443,7 @@ function navShowHome(animated){
 
 function navShowDetail(screen){
   const app=$("#app");
+  hideSplash();
   detailScreen=screen;
   isShowingDetail=true;
   
