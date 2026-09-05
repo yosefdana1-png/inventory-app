@@ -66,5 +66,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>האפליקציה משתמשת במצלמה כדי לצלם תמונה של פריט במלאי.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>האפליקציה ניגשת לתמונות כדי לבחור תמונה לפריט במלאי.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
