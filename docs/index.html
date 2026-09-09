@@ -1490,7 +1490,10 @@ function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
 // Low-stock: an item with lowStock set is "low" when 0 < quantity <= lowStock.
 // Quantity 0 is "out of stock" regardless of threshold.
 // A feature is on only when it is not disabled globally by the user AND not disabled in the warehouse.
-function featOn(key){return userPrefs[key]!==false&&currentWhData?.features?.[key]!==false}
+// showLowStock is OFF by default: an admin must enable it per warehouse. Other features are ON by default.
+const FEAT_DEFAULT_OFF={showLowStock:true};
+function whFeatOn(features,key){return FEAT_DEFAULT_OFF[key]?features?.[key]===true:features?.[key]!==false}
+function featOn(key){return userPrefs[key]!==false&&whFeatOn(currentWhData?.features,key)}
 function lowStockOn(){return featOn('showLowStock')}
 function isLowStock(it){
   if(!lowStockOn())return false;
@@ -2521,11 +2524,11 @@ function showWarehouseSettingsModal(parent,whId,wh){
     const featDefs=[
       {key:'showSku',label:'הצג מק"ט על פריטים'},
       {key:'showImages',label:'הצג תמונות על פריטים'},
-      {key:'showLowStock',label:'התראות מלאי נמוך'},
+      {key:'showLowStock',label:'התראות מלאי נמוך (כבוי כברירת מחדל)'},
     ];
     if(featDefs.some(f=>userPrefs[f.key]===false))dp.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-muted)",marginBottom:"6px"}},"חלק מהאפשרויות כבויות אצלך בהגדרות הכלליות ולכן לא יוצגו לך גם אם הן מופעלות כאן."));
     featDefs.forEach(({key,label},i)=>{
-      toggleRow(dp,userPrefs[key]===false?label+" (כבוי בהגדרות הכלליות)":label,features[key]!==false,async state=>{
+      toggleRow(dp,userPrefs[key]===false?label+" (כבוי בהגדרות הכלליות)":label,whFeatOn(features,key),async state=>{
         await dbUpdate(`warehouses/${whId}`,{[`features/${key}`]:state});
         features[key]=state;
         if(!wh.features)wh.features={};wh.features[key]=state;
