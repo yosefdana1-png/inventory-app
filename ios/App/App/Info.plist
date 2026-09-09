@@ -70,6 +70,10 @@
 	<string>האפליקציה משתמשת במצלמה כדי לצלם תמונה של פריט במלאי.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>האפליקציה ניגשת לתמונות כדי לבחור תמונה לפריט במלאי.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>נדרש עבור בורר המצלמה של iOS. האפליקציה אינה מקליטה קול.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>מאפשר לשמור תמונה שצולמה לספריית התמונות.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>
