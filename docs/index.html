@@ -2048,6 +2048,18 @@ function showNewListModal(parent){
   });
 }
 
+// Live SKU duplicate warning shared by the new/edit item modals.
+function attachSkuDupWarn(skuInput,excludeId){
+  const w=el("p",{style:{fontSize:"12px",color:"var(--warning)",minHeight:"0",margin:"-8px 0 8px"}});
+  skuInput.insertAdjacentElement("afterend",w);
+  skuInput.addEventListener("input",()=>{
+    const k=skuInput.value.trim();
+    const d=k?currentItems.find(([id,it])=>id!==excludeId&&(it.sku||"").trim()===k):null;
+    w.textContent=d?`⚠ המק"ט הזה כבר שייך ל"${d[1].name}"`:"";
+    w.style.minHeight=d?"16px":"0";
+  });
+}
+
 function showNewItemModal(parent,whId){
   showModal(parent,(m,close)=>{
     m.appendChild(el("h3",{style:{marginBottom:"16px"}},"פריט חדש"));
@@ -2062,6 +2074,7 @@ function showNewItemModal(parent,whId){
     const skuInput=el("input",{className:"app-input",placeholder:'מק"ט (אופציונלי)',inputMode:"numeric",pattern:"[0-9]*",autocapitalize:"off",style:{marginBottom:"12px"}});
     const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
     m.append(ni,dupWarn,qi,lowInput,skuInput,noteInput);
+    attachSkuDupWarn(skuInput,null);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const ab=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
@@ -2186,6 +2199,7 @@ function showEditItemModal(parent,whId,itemId,item){
     const noteInput=el("textarea",{className:"app-input",placeholder:"הערה (אופציונלי)",rows:"2"});
     noteInput.value=item.note||"";
     m.append(ni,dupWarn,qi,lowInput,skuInput,noteInput);
+    attachSkuDupWarn(skuInput,itemId);
     const btns=el("div",{style:{display:"flex",gap:"8px",marginTop:"20px"}});
     btns.appendChild(el("button",{className:"btn btn-ghost",style:{flex:"1"},onClick:close},"ביטול"));
     const sb=el("button",{className:"btn btn-primary",style:{flex:"1"},onClick:async()=>{
