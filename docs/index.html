@@ -784,7 +784,8 @@ function attachHomeWarehouseListener(content,screen){
     catOrder=Array.isArray(data)?data:(data?Object.values(data):[]);
     renderCatChips();
   });
-  homeUnsubs.push(u,u2,u3);unsubscribers.push(u,u2,u3);
+  const u4=dbListenCached(`users/${currentUser.username}/prefs`,data=>{userPrefs=data||{}});
+  homeUnsubs.push(u,u2,u3,u4);unsubscribers.push(u,u2,u3,u4);
   return u;
 }
 
@@ -1220,6 +1221,7 @@ let pendingListRender=false; // a list re-render deferred because a touch drag w
 let pendingWhRender=false;   // same, for the home warehouse list
 let lastHomeWhIds=[];
 let whCategories={}; // PERSONAL warehouse categories: whId -> name (users/<me>/whCategories)
+let userPrefs={};    // PERSONAL global feature overrides (users/<me>/prefs): key:false hides the feature in ALL warehouses
 let catFilter=null;  // active category chip on the home screen
 let catOrder=[];     // personal display order of category names (users/<me>/catOrder)
 let userWarehouseRole='member';
@@ -1487,7 +1489,9 @@ function flipReorder(container,cardEls,fromIndex,toIndex,skipEl){
 
 // Low-stock: an item with lowStock set is "low" when 0 < quantity <= lowStock.
 // Quantity 0 is "out of stock" regardless of threshold.
-function lowStockOn(){return currentWhData?.features?.showLowStock!==false}
+// A feature is on only when it is not disabled globally by the user AND not disabled in the warehouse.
+function featOn(key){return userPrefs[key]!==false&&currentWhData?.features?.[key]!==false}
+function lowStockOn(){return featOn('showLowStock')}
 function isLowStock(it){
   if(!lowStockOn())return false;
   const q=it.quantity||0;const t=parseInt(it.lowStock);
@@ -1581,7 +1585,7 @@ function renderItemsList(c,whId,items,wrap){
       }
       const nameEl=card.querySelector('.item-name');
       if(nameEl&&nameEl.textContent!==item.name)nameEl.textContent=item.name;
-      const showImgs=currentWhData?.features?.showImages!==false;
+      const showImgs=featOn('showImages');
       const slotEl=card.querySelector('.item-img-slot');
       if(showImgs){
         if(slotEl){
@@ -1591,7 +1595,7 @@ function renderItemsList(c,whId,items,wrap){
           else if(thumbEl)thumbEl.remove();
         }
       }else if(slotEl)slotEl.remove();
-      const showSku=currentWhData?.features?.showSku!==false;
+      const showSku=featOn('showSku');
       const skuEl=card.querySelector('.item-sku');
       if(showSku&&item.sku){
         if(skuEl)skuEl.textContent=`מק"ט: ${item.sku}`;
@@ -1836,7 +1840,7 @@ function renderItemsList(c,whId,items,wrap){
 
     const info=el("div",{className:"item-info",style:{flex:"1",minWidth:"0"}});
     info.appendChild(el("div",{className:"item-name",style:{fontSize:"16px",fontWeight:"500",marginBottom:"2px"}},item.name));
-    if(currentWhData?.features?.showSku!==false&&item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
+    if(featOn('showSku')&&item.sku)info.appendChild(el("div",{className:"item-sku",style:{fontSize:"11px",color:"var(--text-muted)",marginBottom:"2px"}},`מק"ט: ${item.sku}`));
     if(item.note){info.appendChild(el("div",{className:"note-text item-note"},item.note))}
     const qr=el("div",{className:"item-qty-row",style:{display:"flex",alignItems:"center",gap:"8px",marginTop:"4px"}});
     qr.appendChild(el("span",{className:"item-qty",style:{fontSize:"24px",fontWeight:"700",fontVariantNumeric:"tabular-nums",color:qtyColor(item)}},String(item.quantity||0)));
@@ -1902,7 +1906,7 @@ function renderItemsList(c,whId,items,wrap){
       actions.append(mb,sb,ab);
     }
     // Image slot always reserved when feature on — keeps text at uniform position
-    if(currentWhData?.features?.showImages!==false&&!reorderMode){
+    if(featOn('showImages')&&!reorderMode){
       const slot=el("div",{className:"item-img-slot"});
       const thumbSrc=item.thumb||item.image;
       if(thumbSrc){const t=el("img",{className:"item-thumb",src:thumbSrc,loading:"lazy",decoding:"async",onClick:async()=>{const v=showImageViewer(thumbSrc);const full=await fetchFullImage(whId,itemId,item);if(v&&full)v.src=full}});slot.appendChild(t);}
@@ -2519,8 +2523,9 @@ function showWarehouseSettingsModal(parent,whId,wh){
       {key:'showImages',label:'הצג תמונות על פריטים'},
       {key:'showLowStock',label:'התראות מלאי נמוך'},
     ];
+    if(featDefs.some(f=>userPrefs[f.key]===false))dp.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-muted)",marginBottom:"6px"}},"חלק מהאפשרויות כבויות אצלך בהגדרות הכלליות ולכן לא יוצגו לך גם אם הן מופעלות כאן."));
     featDefs.forEach(({key,label},i)=>{
-      toggleRow(dp,label,features[key]!==false,async state=>{
+      toggleRow(dp,userPrefs[key]===false?label+" (כבוי בהגדרות הכלליות)":label,features[key]!==false,async state=>{
         await dbUpdate(`warehouses/${whId}`,{[`features/${key}`]:state});
         features[key]=state;
         if(!wh.features)wh.features={};wh.features[key]=state;
@@ -3026,34 +3031,88 @@ function showStockCountModal(parent,whId){
 }
 
 function showSettingsModal(parent){
-  showModal(parent,(m,close)=>{
-    m.style.position="relative";
-    const closeX=el("button",{style:{position:"absolute",top:"16px",left:"16px",width:"32px",height:"32px",borderRadius:"50%",border:"none",background:"transparent",color:"var(--text-sec)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"},onClick:close});
-    closeX.appendChild(icon("close",18));
-    m.appendChild(closeX);
-    m.appendChild(el("h3",{style:{marginBottom:"20px"}},"הגדרות"));
-    const uc=el("div",{style:{padding:"14px 16px",background:"var(--bg)",borderRadius:"12px",border:"1px solid var(--border)",marginBottom:"12px"}});
-    uc.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500",marginBottom:"4px"}},"חשבון"));
-    uc.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)"}},`שם: ${currentUser.displayName}`));
-    uc.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)"}},`משתמש: ${currentUser.username}`));
-    m.appendChild(uc);
-    const sc=el("div",{style:{padding:"14px 16px",background:"var(--bg)",borderRadius:"12px",border:"1px solid var(--border)",marginBottom:"12px"}});
-    sc.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500",marginBottom:"4px"}},"שיתוף מחסנים"));
-    sc.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-sec)"}},"מחסנים משותפים מסונכרנים בזמן אמת בין כל החברים."));
-    m.appendChild(sc);
-    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"8px"},onClick:()=>{close();manageCategoriesSheet()}},"ניהול קטגוריות"));
-    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"12px"},onClick:()=>{close();showChangePasswordModal(parent)}},"שנה סיסמה"));
-    m.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"12px",color:"var(--danger)",borderColor:"rgba(255,92,92,.3)"},onClick:()=>{
-      cleanup();
-      homeUnsubs.forEach(f=>f());homeUnsubs=[];
-      whCardListeners.forEach(f=>f());whCardListeners=[];
-      currentUser=null;homeScreen=null;cachedHomeContent=null;
-      currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;whCategories={};catFilter=null;catOrder=[];
-      cacheClearAll();localStorage.removeItem("inv_user");
-      if(FB&&FB.auth)try{FB.signOut(FB.auth)}catch(e){}
-      close();renderAuth();
-    }},"התנתק"));
+  const ov=el("div",{className:"fullscreen-modal",style:{position:"fixed",inset:"0",zIndex:"1000",background:"var(--bg)",display:"flex",flexDirection:"column",animation:"fadeIn .18s ease"}});
+  const close=()=>ov.remove();
+  const head=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"max(16px, env(safe-area-inset-top)) 20px 14px",borderBottom:"1px solid var(--border)",flexShrink:"0"}});
+  const ttl=el("div");
+  ttl.appendChild(el("h2",{style:{fontSize:"19px",fontWeight:"700"}},"הגדרות כלליות"));
+  ttl.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)",marginTop:"2px"}},"חלות על כל המחסנים שלך"));
+  const x=el("button",{className:"icon-btn",onClick:close});x.appendChild(icon("close",22));
+  head.append(ttl,x);
+  ov.appendChild(head);
+  const body=el("div",{style:{flex:"1",overflowY:"auto",padding:"16px 16px calc(40px + env(safe-area-inset-bottom))"}});
+  ov.appendChild(body);
+
+  const section=(title,hint)=>{
+    const sec=el("div",{style:{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"16px",padding:"14px 16px",marginBottom:"14px"}});
+    if(title)sec.appendChild(el("div",{style:{fontSize:"12px",fontWeight:"700",color:"var(--text-muted)",letterSpacing:".4px",marginBottom:hint?"4px":"10px"}},title));
+    if(hint)sec.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-sec)",marginBottom:"10px",lineHeight:"1.5"}},hint));
+    body.appendChild(sec);
+    return sec;
+  };
+  const toggleRow=(container,label,on,onFlip,last)=>{
+    const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",padding:"11px 0",borderBottom:last?"none":"1px solid var(--border)"}});
+    row.appendChild(el("span",{style:{fontSize:"14px"}},label));
+    let state=on;
+    const tog=el("button",{style:{width:"46px",height:"26px",borderRadius:"13px",border:"none",cursor:"pointer",background:state?"var(--accent)":"var(--border)",transition:"background .2s",position:"relative",flexShrink:"0"},onClick:async()=>{
+      state=!state;
+      tog.style.background=state?"var(--accent)":"var(--border)";
+      knob.style.right=state?"2px":"";knob.style.left=state?"":"2px";
+      try{await onFlip(state)}catch(e){}
+    }});
+    const knob=el("div",{style:{position:"absolute",width:"22px",height:"22px",borderRadius:"50%",background:"#fff",top:"2px",transition:"left .2s, right .2s",...(state?{right:"2px"}:{left:"2px"})}});
+    tog.appendChild(knob);row.appendChild(tog);
+    container.appendChild(row);
+  };
+  const linkRow=(container,label,onClick,last,danger)=>{
+    const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",padding:"12px 0",borderBottom:last?"none":"1px solid var(--border)",cursor:"pointer",color:danger?"var(--danger)":""},onClick});
+    row.appendChild(el("span",{style:{fontSize:"14px"}},label));
+    if(!danger){const ch=el("span",{style:{color:"var(--text-muted)",display:"flex"}});ch.appendChild(icon("forward",18));row.appendChild(ch);}
+    container.appendChild(row);
+  };
+
+  // ── חשבון ──
+  const acc=section("חשבון");
+  acc.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500"}},currentUser.displayName));
+  acc.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)",marginBottom:"6px"}},`משתמש: ${currentUser.username}`));
+  linkRow(acc,"שינוי סיסמה",()=>{showChangePasswordModal(parent)},true);
+
+  // ── תצוגה בכל המחסנים ──
+  const dp=section("תצוגה בכל המחסנים","כיבוי כאן מסתיר את האפשרות אצלך בכל המחסנים, גם אם היא מופעלת בהגדרות של מחסן מסוים. ההגדרה אישית ולא משפיעה על חברים אחרים.");
+  const featDefs=[
+    {key:'showSku',label:'מק"טים על פריטים'},
+    {key:'showImages',label:'תמונות על פריטים'},
+    {key:'showLowStock',label:'התראות מלאי נמוך'},
+  ];
+  featDefs.forEach(({key,label},i)=>{
+    toggleRow(dp,label,userPrefs[key]!==false,async state=>{
+      userPrefs[key]=state;
+      await dbUpdate(`users/${currentUser.username}/prefs`,{[key]:state});
+    },i===featDefs.length-1);
   });
+
+  // ── קטגוריות ──
+  const cs=section("קטגוריות","קטגוריות הן אישיות ומסדרות את המחסנים במסך הבית.");
+  linkRow(cs,"ניהול קטגוריות",()=>{close();manageCategoriesSheet()},true);
+
+  // ── שיתוף ──
+  const sc=section("שיתוף מחסנים");
+  sc.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)",lineHeight:"1.5"}},"מחסנים משותפים מסונכרנים בזמן אמת בין כל החברים. הגדרות שיתוף והרשאות נמצאות בהגדרות של כל מחסן."));
+
+  // ── התנתקות ──
+  const out=section();
+  linkRow(out,"התנתק",()=>{
+    cleanup();
+    homeUnsubs.forEach(f=>f());homeUnsubs=[];
+    whCardListeners.forEach(f=>f());whCardListeners=[];
+    currentUser=null;homeScreen=null;cachedHomeContent=null;
+    currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;whCategories={};catFilter=null;catOrder=[];userPrefs={};
+    cacheClearAll();localStorage.removeItem("inv_user");
+    if(FB&&FB.auth)try{FB.signOut(FB.auth)}catch(e){}
+    close();renderAuth();
+  },true,true);
+
+  document.body.appendChild(ov);
 }
 
 function showChangePasswordModal(parent){
