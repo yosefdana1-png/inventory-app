@@ -121,6 +121,24 @@
     .empty-state{text-align:center;padding:60px 20px;color:var(--text-muted)}
     .history-row{padding:10px 0;display:flex;justify-content:space-between;align-items:center}
     .history-row+.history-row{border-top:1px solid var(--border)}
+
+    /* ── Wide layout (iPad landscape, Mac, desktop ≥ 900px): split view ──
+       Home (warehouses) becomes a sidebar on the right, the open warehouse fills
+       the rest. Phones keep the stacked navigation untouched. */
+    body.wide #app{display:flex;flex-direction:row;height:100vh;height:100dvh;overflow:hidden}
+    body.wide #app>.screen{flex:1 1 auto;min-width:0;height:100%;min-height:0}
+    body.wide #app.split>.home-screen{flex:0 0 380px;border-left:1px solid var(--border)}
+    body.wide #app.split>.home-screen .fab{left:auto;right:160px;transform:none}
+    body.wide #app.split>.screen:not(.home-screen) .fab{left:calc((100vw - 380px)/2);transform:translateX(-50%)}
+    body.wide .detail-back{display:none!important}
+    body.wide #app.split>.screen:not(.home-screen)>:not(.header):not(.fab):not(.scroll-top-btn){max-width:940px;margin-left:auto;margin-right:auto}
+    body.wide .wh-selected .list-card{border-color:var(--accent);background:var(--card-hover)}
+    body.wide .detail-placeholder{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-muted);background:var(--bg)}
+    body.wide .fullscreen-modal{left:50%!important;right:auto!important;top:4vh!important;bottom:4vh!important;width:min(680px,92vw);transform:translateX(-50%);border-radius:22px;border:1px solid var(--border);overflow:hidden;box-shadow:0 0 0 100vmax rgba(0,0,0,.55),0 30px 80px rgba(0,0,0,.6)}
+    body.wide .action-sheet-overlay{align-items:center}
+    body.wide .action-sheet-panel{width:min(440px,92vw);border-radius:20px;border:1px solid var(--border);margin-bottom:32px;padding-bottom:10px}
+    body.wide .modal{max-width:460px}
+    @media (min-width:900px){body:not(.wide) .screen{max-width:100%}}
     .spinning{animation:spin .6s linear}.shaking{animation:shake .5s ease}.screen{background:var(--bg);min-height:100vh;min-height:100dvh;height:100vh;height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch}
     .tab-bar{display:flex;gap:4px;background:var(--surface);border-radius:12px;padding:4px;border:1px solid var(--border);margin-bottom:16px}
     .tab-btn{flex:1;padding:9px 4px;border-radius:10px;border:none;background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;transition:all .2s;white-space:nowrap}
@@ -304,7 +322,7 @@ function hideSplash(){
   const wait=Math.max(0,500-(Date.now()-splashShownAt));
   setTimeout(()=>{sp.style.opacity="0";sp.style.pointerEvents="none";setTimeout(()=>sp.remove(),400)},wait);
 }
-function render(s){const a=$("#app");a.innerHTML="";a.appendChild(s);hideSplash()}
+function render(s){const a=$("#app");a.classList.remove("split");a.innerHTML="";a.appendChild(s);hideSplash()}
 
 // ═══════════ JOIN-BY-QR ═══════════
 // A warehouse QR encodes APP_URL#join=<whId>.<inviteToken>. Scanning it with
@@ -395,6 +413,26 @@ let homeScreen=null;
 let detailScreen=null;
 let isShowingDetail=false;
 
+const wideMQ=window.matchMedia("(min-width: 900px)");
+function isWide(){return wideMQ.matches}
+function applyWideClass(){document.body.classList.toggle("wide",isWide())}
+applyWideClass();
+// Re-layout when crossing the breakpoint (iPad rotation, window resize).
+wideMQ.addEventListener("change",()=>{
+  applyWideClass();
+  if(!homeScreen||!currentUser)return;
+  if(isShowingDetail&&detailScreen)navShowDetail(detailScreen);
+  else navShowHome(false);
+});
+function detailPlaceholder(){
+  const ph=el("div",{className:"detail-placeholder"});
+  const ic=icon("box",48);ic.style.opacity=".35";
+  ph.append(ic,el("div",{style:{fontSize:"15px"}},"בחר מחסן מהרשימה"));
+  return ph;
+}
+function markSelectedWh(){
+  document.querySelectorAll('#warehouseCards [id^="wh-"]').forEach(c=>c.classList.toggle("wh-selected",!!currentWhId&&c.id==="wh-"+currentWhId));
+}
 function navInit(){
   const app=$("#app");
   app.style.position="relative";
@@ -405,6 +443,18 @@ function navShowHome(animated){
   const app=$("#app");
   if(!homeScreen)return;
   hideSplash();
+
+  if(isWide()){
+    // Split view: keep the sidebar, clear the detail pane.
+    app.innerHTML="";
+    homeScreen.style.cssText="";homeScreen.classList.add("home-screen");
+    app.appendChild(homeScreen);app.appendChild(detailPlaceholder());
+    app.classList.add("split");
+    if(detailScreen)detailScreen.style.cssText="";
+    isShowingDetail=false;markSelectedWh();
+    return;
+  }
+  app.classList.remove("split");
   
   if(!isShowingDetail||!animated){
     app.innerHTML="";
@@ -446,6 +496,16 @@ function navShowDetail(screen){
   hideSplash();
   detailScreen=screen;
   isShowingDetail=true;
+
+  if(isWide()&&homeScreen){
+    app.innerHTML="";
+    homeScreen.style.cssText="";homeScreen.classList.add("home-screen");
+    screen.style.cssText="";
+    app.appendChild(homeScreen);app.appendChild(screen);
+    app.classList.add("split");markSelectedWh();
+    return;
+  }
+  app.classList.remove("split");
   
   if(homeScreen&&app.contains(homeScreen)){
     // Set up home to be behind
@@ -785,7 +845,11 @@ function attachHomeWarehouseListener(content,screen){
     renderCatChips();
   });
   const u4=dbListenCached(`users/${currentUser.username}/prefs`,data=>{userPrefs=data||{}});
-  homeUnsubs.push(u,u2,u3,u4);unsubscribers.push(u,u2,u3,u4);
+  // Home listeners live in homeUnsubs only: cleanup() (run when a warehouse
+  // opens) must not kill the sidebar in split view. dbListenCached also pushed
+  // them to unsubscribers — pull them back out.
+  [u,u2,u3,u4].forEach(f=>{const i=unsubscribers.indexOf(f);if(i>=0)unsubscribers.splice(i,1)});
+  homeUnsubs.push(u,u2,u3,u4);
   return u;
 }
 
@@ -798,7 +862,7 @@ function renderHome(){
     attachHomeWarehouseListener(cachedHomeContent,homeScreen);
     return;
   }
-  const wrap=el("div",{className:"screen",style:{paddingBottom:"calc(100px + env(safe-area-inset-bottom))"}});
+  const wrap=el("div",{className:"screen home-screen",style:{paddingBottom:"calc(100px + env(safe-area-inset-bottom))"}});
   const header=el("div",{className:"header"});
   const hr=el("div");
   hr.appendChild(el("h1",{style:{fontSize:"24px",fontWeight:"700"}},"ניהול מלאי"));
@@ -889,6 +953,7 @@ function renderWarehouseList(c,whIds,wrap){
     }
   });
   applyCatFilter();
+  markSelectedWh();
 }
 
 function buildWarehouseCard(cardWrapper,whId,wh,wrap){
@@ -1234,11 +1299,12 @@ function memberCan(action){
 }
 
 function renderListDetail(whId){
+  if(isWide()&&isShowingDetail&&currentWhId===whId&&!document.querySelector('.modal-overlay'))return;
   cleanup();currentSort="manual";searchQuery="";reorderMode=false;lowFilter=false;userWarehouseRole='member';currentWhData=null;
   const wrap=el("div",{className:"screen",style:{paddingBottom:"calc(100px + env(safe-area-inset-bottom))"}});
   const header=el("div",{className:"header"});
   const hr=el("div",{style:{display:"flex",alignItems:"center",gap:"12px"}});
-  const bb=el("button",{className:"icon-btn",style:{color:"var(--accent)"},onClick:()=>renderHome()});
+  const bb=el("button",{className:"icon-btn detail-back",style:{color:"var(--accent)"},onClick:()=>renderHome()});
   bb.appendChild(icon("back",22));
   const hi=el("div");const titleEl=el("h1",{style:{fontSize:"20px",fontWeight:"600"}});
   const countEl=el("span",{style:{fontSize:"12px",color:"var(--text-muted)"}});
@@ -1282,6 +1348,7 @@ function renderListDetail(whId){
     // listener) would snap items back to the warehouse's default sort.
     if(data.sortMode&&!reorderMode)currentSort=data.sortMode;
     renderItemsView(content,whId,items,wrap);
+    markSelectedWh();
   });
 }
 
@@ -3177,7 +3244,7 @@ let swipeActive=false;
 function canSwipeBack(){
   // No back-swipe while a modal or action sheet is open — the gesture would
   // navigate the screen underneath the dialog.
-  return currentWhId && document.querySelector('#searchWrap')
+  return currentWhId && !isWide() && document.querySelector('#searchWrap')
     && !document.querySelector('.modal-overlay')
     && !document.querySelector('.fullscreen-modal')
     && !document.querySelector('.action-sheet-overlay');
