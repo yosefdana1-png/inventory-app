@@ -443,9 +443,10 @@ function navInit(){
 // Every in-app "layer" (detail screen, modal, fullscreen page, action sheet)
 // pushes a history entry; popstate closes the topmost layer. Programmatic
 // closes pop their own entry (flagged so the popstate handler ignores it).
-let navDepth=0,ignorePop=0;
+let navDepth=0,ignorePop=0,closingFromPop=false;
 function pushNav(){try{history.pushState({nav:++navDepth},"");}catch(e){}}
-function popNav(){if(navDepth>0){navDepth--;ignorePop++;try{history.back()}catch(e){ignorePop--}}}
+// A layer closed BY the back button must not pop again (its entry is already gone).
+function popNav(){if(closingFromPop)return;if(navDepth>0){navDepth--;ignorePop++;try{history.back()}catch(e){ignorePop--}}}
 function closeTopLayer(){
   const viewer=document.querySelector('.viewer-overlay');
   if(viewer){viewer.click();return true}
@@ -461,7 +462,8 @@ function closeTopLayer(){
 window.addEventListener("popstate",()=>{
   if(ignorePop>0){ignorePop--;return}
   if(navDepth>0)navDepth--;
-  closeTopLayer();
+  closingFromPop=true;
+  try{closeTopLayer()}finally{closingFromPop=false}
 });
 
 function navShowHome(animated){
