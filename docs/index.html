@@ -96,7 +96,7 @@
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;animation:fadeIn .15s ease}
     .modal{background:var(--surface);border-radius:20px;padding:28px;width:100%;max-width:400px;border:1px solid var(--border);animation:scaleIn .2s ease;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
     .modal h3{font-size:18px;font-weight:600;margin-bottom:4px}
-    .header{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--border);padding:max(16px,env(safe-area-inset-top)) 20px 16px;display:flex;align-items:center;justify-content:space-between}
+    .header{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--border);padding:max(16px,var(--safe-area-inset-top, env(safe-area-inset-top))) 20px 16px;display:flex;align-items:center;justify-content:space-between}
     .list-card{background:var(--card);border-radius:16px;padding:18px 20px;border:1px solid var(--border);cursor:pointer;transition:background .2s;display:flex;align-items:center;justify-content:space-between}
     .list-card:active,.list-card:hover{background:var(--card-hover)}
     .item-card{background:var(--card);border-radius:16px;padding:14px 12px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;transition:all .2s;gap:4px;overflow:hidden}
@@ -113,7 +113,7 @@
     .qty-btn{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
     .qty-btn-add{background:var(--success-bg);border:1px solid rgba(52,211,153,.2);color:var(--success)}
     .qty-btn-sub{background:var(--danger-bg);border:1px solid rgba(255,92,92,.2);color:var(--danger)}
-    .fab{position:fixed;bottom:calc(28px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:60px;height:60px;border-radius:18px;background:var(--accent);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(79,140,255,.4);z-index:90}
+    .fab{position:fixed;bottom:calc(28px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));left:50%;transform:translateX(-50%);width:60px;height:60px;border-radius:18px;background:var(--accent);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(79,140,255,.4);z-index:90}
     .toggle-group{display:flex;gap:8px;margin-bottom:20px}
     .toggle-pill{flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;transition:all .2s}
     .toggle-pill.active-add{border-color:var(--success);background:var(--success-bg);color:var(--success)}
@@ -153,7 +153,7 @@
     .toolbar-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;font-size:12px;display:flex;align-items:center;gap:4px;transition:all .2s;white-space:nowrap}
     @keyframes sheetSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
     .action-sheet-overlay{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.55);display:flex;flex-direction:column;justify-content:flex-end;animation:fadeIn .2s ease;transition:opacity .18s ease}
-    .action-sheet-panel{background:var(--surface);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding-bottom:max(env(safe-area-inset-bottom),10px);animation:sheetSlideUp .32s cubic-bezier(0.32,0.72,0,1);transition:transform .2s ease-in;box-shadow:0 -12px 40px rgba(0,0,0,0.45);max-height:80vh;overflow-y:auto}
+    .action-sheet-panel{background:var(--surface);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding-bottom:max(var(--safe-area-inset-bottom, env(safe-area-inset-bottom)),10px);animation:sheetSlideUp .32s cubic-bezier(0.32,0.72,0,1);transition:transform .2s ease-in;box-shadow:0 -12px 40px rgba(0,0,0,0.45);max-height:80vh;overflow-y:auto}
     .sheet-grabber{width:36px;height:4px;border-radius:2px;background:var(--border);margin:10px auto 6px;flex-shrink:0}
     .action-sheet-item{width:100%;padding:15px 22px;text-align:right;font-size:16px;font-family:inherit;border:none;cursor:pointer;display:block;background:transparent;color:var(--text);transition:background .12s;-webkit-tap-highlight-color:transparent}
     .action-sheet-item+.action-sheet-item{border-top:1px solid var(--border)}
@@ -161,7 +161,7 @@
     .action-sheet-item.danger{color:var(--danger)}
     .action-sheet-cancel{width:100%;padding:15px 22px;margin-top:4px;text-align:center;font-size:16px;font-weight:600;font-family:inherit;border:none;border-top:1px solid var(--border);cursor:pointer;display:block;background:transparent;color:var(--text-sec);-webkit-tap-highlight-color:transparent}
     .action-sheet-cancel:active{background:var(--card-hover)}
-    .scroll-top-btn{position:fixed;bottom:calc(100px + env(safe-area-inset-bottom));left:20px;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,0.14);-webkit-backdrop-filter:blur(80px) saturate(180%) brightness(1.12);backdrop-filter:blur(80px) saturate(180%) brightness(1.12);border:none;color:#0a84ff;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:80;box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.30),inset 0 2px 1px rgba(255,255,255,0.50),0 8px 24px rgba(0,0,0,0.50);opacity:0;transform:translateY(8px);transition:opacity .25s ease, transform .25s ease}
+    .scroll-top-btn{position:fixed;bottom:calc(100px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));left:20px;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,0.14);-webkit-backdrop-filter:blur(80px) saturate(180%) brightness(1.12);backdrop-filter:blur(80px) saturate(180%) brightness(1.12);border:none;color:#0a84ff;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:80;box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.30),inset 0 2px 1px rgba(255,255,255,0.50),0 8px 24px rgba(0,0,0,0.50);opacity:0;transform:translateY(8px);transition:opacity .25s ease, transform .25s ease}
     .scroll-top-btn.visible{display:flex;opacity:1;transform:translateY(0)}
     .toolbar-btn:hover,.toolbar-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
     .toolbar-btn.danger-hover:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
@@ -171,7 +171,7 @@
     .cat-chip:active{transform:scale(.96)}
     .drag-handle{cursor:grab;touch-action:none;color:var(--text-muted);padding:4px}
     .drag-handle:active{cursor:grabbing}
-    .undo-toast{position:fixed;bottom:calc(104px + env(safe-area-inset-bottom));left:16px;right:16px;z-index:4000;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px 12px 12px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,.55);animation:fadeIn .2s ease}
+    .undo-toast{position:fixed;bottom:calc(104px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));left:16px;right:16px;z-index:4000;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px 12px 12px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,.55);animation:fadeIn .2s ease}
     .undo-btn{background:var(--accent-glow);border:1px solid rgba(79,140,255,.3);color:var(--accent);border-radius:10px;padding:8px 18px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0}
     .item-img-slot{width:56px;height:56px;flex-shrink:0;margin-right:10px;border-radius:10px}
     .item-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;cursor:pointer;border:1px solid var(--border);display:block;background:var(--bg);content-visibility:auto}
@@ -361,7 +361,7 @@ function showNotice(message){
 }
 // Fullscreen QR display (image-viewer style) — tap anywhere to close.
 function showQRViewer(joinUrl){
-  const ov=el('div',{style:{position:'fixed',inset:'0',zIndex:'5000',background:'rgba(0,0,0,0.96)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'18px'},onClick:()=>ov.remove()});
+  const ov=el('div',{className:'viewer-overlay',style:{position:'fixed',inset:'0',zIndex:'5000',background:'rgba(0,0,0,0.96)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'18px'},onClick:()=>{ov.remove();popNav()}});pushNav();
   const size=Math.min(320,window.innerWidth-90);
   const box=el('div',{style:{background:'#fff',borderRadius:'20px',padding:'18px'}});
   new QRCode(box,{text:joinUrl,width:size,height:size,correctLevel:QRCode.CorrectLevel.M});
@@ -439,10 +439,36 @@ function navInit(){
   app.style.width="100%";
 }
 
+// ── System back button (Android) ──
+// Every in-app "layer" (detail screen, modal, fullscreen page, action sheet)
+// pushes a history entry; popstate closes the topmost layer. Programmatic
+// closes pop their own entry (flagged so the popstate handler ignores it).
+let navDepth=0,ignorePop=0;
+function pushNav(){try{history.pushState({nav:++navDepth},"");}catch(e){}}
+function popNav(){if(navDepth>0){navDepth--;ignorePop++;try{history.back()}catch(e){ignorePop--}}}
+function closeTopLayer(){
+  const viewer=document.querySelector('.viewer-overlay');
+  if(viewer){viewer.click();return true}
+  const sheet=document.querySelector('.action-sheet-overlay');
+  if(sheet){sheet.click();return true}
+  const modal=document.querySelector('.modal-overlay');
+  if(modal){modal.click();return true}
+  const fs=[...document.querySelectorAll('.fullscreen-modal')].pop();
+  if(fs){const x=fs.querySelector('.icon-btn');if(x)x.click();else fs.remove();return true}
+  if(isShowingDetail&&!isWide()){renderHome();return true}
+  return false;
+}
+window.addEventListener("popstate",()=>{
+  if(ignorePop>0){ignorePop--;return}
+  if(navDepth>0)navDepth--;
+  closeTopLayer();
+});
+
 function navShowHome(animated){
   const app=$("#app");
   if(!homeScreen)return;
   hideSplash();
+  if(isShowingDetail&&!isWide())popNav();
 
   if(isWide()){
     // Split view: keep the sidebar, clear the detail pane.
@@ -494,6 +520,7 @@ function navShowHome(animated){
 function navShowDetail(screen){
   const app=$("#app");
   hideSplash();
+  if(!isShowingDetail&&!isWide())pushNav();
   detailScreen=screen;
   isShowingDetail=true;
 
@@ -862,7 +889,7 @@ function renderHome(){
     attachHomeWarehouseListener(cachedHomeContent,homeScreen);
     return;
   }
-  const wrap=el("div",{className:"screen home-screen",style:{paddingBottom:"calc(100px + env(safe-area-inset-bottom))"}});
+  const wrap=el("div",{className:"screen home-screen",style:{paddingBottom:"calc(100px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)))"}});
   const header=el("div",{className:"header"});
   const hr=el("div");
   hr.appendChild(el("h1",{style:{fontSize:"24px",fontWeight:"700"}},"ניהול מלאי"));
@@ -1301,7 +1328,7 @@ function memberCan(action){
 function renderListDetail(whId){
   if(isWide()&&isShowingDetail&&currentWhId===whId&&!document.querySelector('.modal-overlay'))return;
   cleanup();currentSort="manual";searchQuery="";reorderMode=false;lowFilter=false;userWarehouseRole='member';currentWhData=null;
-  const wrap=el("div",{className:"screen",style:{paddingBottom:"calc(100px + env(safe-area-inset-bottom))"}});
+  const wrap=el("div",{className:"screen",style:{paddingBottom:"calc(100px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)))"}});
   const header=el("div",{className:"header"});
   const hr=el("div",{style:{display:"flex",alignItems:"center",gap:"12px"}});
   const bb=el("button",{className:"icon-btn detail-back",style:{color:"var(--accent)"},onClick:()=>renderHome()});
@@ -1931,6 +1958,7 @@ function renderItemsList(c,whId,items,wrap){
           if(fresh)item=fresh[1];
           const mainOpts=[];
           if(canEdit)mainOpts.push({label:"עריכה",value:"edit"});
+          if(canEdit&&!item.thumb&&!item.image&&featOn('showImages'))mainOpts.push({label:"הוסף תמונה",value:"photo"});
           mainOpts.push({label:"היסטוריה",value:"history"});
           if(memberCan('reset')&&(item.quantity||0)>0)mainOpts.push({label:"אפס כמות ל-0",style:"danger",value:"reset"});
           if(canEdit)mainOpts.push({label:`מחק "${item.name}"`,style:"danger",value:"delete"});
@@ -1939,6 +1967,8 @@ function renderItemsList(c,whId,items,wrap){
 
           if(choice==="edit"){
             showEditItemModal(wrap,whId,itemId,item);return;
+          }else if(choice==="photo"){
+            showEditItemModal(wrap,whId,itemId,item,{openPicker:true});return;
           }else if(choice==="history"){
             showHistoryModal(wrap,item);return;
           }else if(choice==="reset"){
@@ -2058,7 +2088,7 @@ async function migrateLegacyItemImages(whId,items){
 }
 
 function showImageViewer(imgData){
-  const ov=el('div',{style:{position:'fixed',inset:'0',zIndex:'5000',background:'rgba(0,0,0,0.96)',display:'flex',alignItems:'center',justifyContent:'center'},onClick:()=>ov.remove()});
+  const ov=el('div',{className:'viewer-overlay',style:{position:'fixed',inset:'0',zIndex:'5000',background:'rgba(0,0,0,0.96)',display:'flex',alignItems:'center',justifyContent:'center'},onClick:()=>{ov.remove();popNav()}});pushNav();
   const img=el('img',{src:imgData,decoding:'async',style:{maxWidth:'92vw',maxHeight:'88vh',borderRadius:'14px',objectFit:'contain',boxShadow:'0 20px 60px rgba(0,0,0,0.6)'}});
   const closeHint=el('div',{style:{position:'absolute',bottom:'24px',left:'0',right:'0',textAlign:'center',fontSize:'13px',color:'rgba(255,255,255,0.4)'}},'הקש לסגירה');
   ov.append(img,closeHint);document.body.appendChild(ov);
@@ -2072,7 +2102,7 @@ function showActionSheet(items,title){
     const panel=el("div",{className:"action-sheet-panel"});
     let done=false;
     const dismiss=val=>{
-      if(done)return;done=true;
+      if(done)return;done=true;popNav();
       // Animate out: the panel slides back down while the backdrop fades.
       ov.style.opacity="0";
       panel.style.transform="translateY(100%)";
@@ -2088,14 +2118,16 @@ function showActionSheet(items,title){
       panel.appendChild(el("button",{className:"action-sheet-item"+(st==='danger'?' danger':''),onClick:()=>dismiss(value)},label));
     });
     panel.appendChild(el("button",{className:"action-sheet-cancel",onClick:()=>dismiss(null)},"ביטול"));
+    pushNav();
     ov.appendChild(panel);
     document.body.appendChild(ov);
   });
 }
 
 function showModal(parent,builder){
-  const ov=el("div",{className:"modal-overlay",onClick:e=>{if(e.target===ov)ov.remove()}});
-  const m=el("div",{className:"modal"});builder(m,()=>ov.remove());ov.appendChild(m);parent.appendChild(ov);
+  let closed=false;const closeM=()=>{if(closed)return;closed=true;ov.remove();popNav()};
+  const ov=el("div",{className:"modal-overlay",onClick:e=>{if(e.target===ov)closeM()}});
+  const m=el("div",{className:"modal"});builder(m,closeM);ov.appendChild(m);parent.appendChild(ov);pushNav();
 }
 
 function showNewListModal(parent){
@@ -2208,7 +2240,7 @@ function showAdjustModal(parent,whId,itemId,item,mode){
 
 // Unified item edit modal — all fields in one window, same layout as new-item.
 // Empty SKU/note save as null, which removes them from Firebase.
-function showEditItemModal(parent,whId,itemId,item){
+function showEditItemModal(parent,whId,itemId,item,opts={}){
   showModal(parent,(m,close)=>{
     m.appendChild(el("h3",{style:{marginBottom:"4px"}},"עריכת פריט"));
     m.appendChild(el("p",{style:{color:"var(--text-sec)",fontSize:"14px",marginBottom:"16px"}},item.name));
@@ -2236,6 +2268,7 @@ function showEditItemModal(parent,whId,itemId,item){
       pickBtn.textContent=pendingThumb?"החלף תמונה":"הוסף תמונה";
       delImgBtn.style.display=pendingThumb?"":"none";
     }
+    if(opts.openPicker)setTimeout(()=>fileInput.click(),0);
     imgSlot.addEventListener("click",async()=>{
       if(!pendingThumb){fileInput.click();return}
       if(imageChanged)showImageViewer(pendingFull||pendingThumb);
@@ -2392,9 +2425,9 @@ function showConfirmModal(parent,title,msg,onConfirm){
 function showWarehouseSettingsModal(parent,whId,wh){
   const isAdmin=userWarehouseRole==='owner'||userWarehouseRole==='admin';
   const ov=el("div",{className:"fullscreen-modal",style:{position:"fixed",inset:"0",zIndex:"1000",background:"var(--bg)",display:"flex",flexDirection:"column",animation:"fadeIn .18s ease"}});
-  const close=()=>ov.remove();
+  let closed=false;const close=()=>{if(closed)return;closed=true;ov.remove();popNav()};pushNav();
 
-  const head=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"max(16px, env(safe-area-inset-top)) 20px 14px",borderBottom:"1px solid var(--border)",flexShrink:"0"}});
+  const head=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"max(16px, var(--safe-area-inset-top, env(safe-area-inset-top))) 20px 14px",borderBottom:"1px solid var(--border)",flexShrink:"0"}});
   const ttl=el("div");
   ttl.appendChild(el("h2",{style:{fontSize:"19px",fontWeight:"700"}},"הגדרות מחסן"));
   const subTtl=el("div",{style:{fontSize:"13px",color:"var(--text-sec)",marginTop:"2px"}},wh.name);
@@ -2403,7 +2436,7 @@ function showWarehouseSettingsModal(parent,whId,wh){
   head.append(ttl,x);
   ov.appendChild(head);
 
-  const body=el("div",{style:{flex:"1",overflowY:"auto",padding:"16px 16px calc(40px + env(safe-area-inset-bottom))"}});
+  const body=el("div",{style:{flex:"1",overflowY:"auto",padding:"16px 16px calc(40px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)))"}});
   ov.appendChild(body);
 
   const section=title=>{
@@ -3116,15 +3149,15 @@ function showStockCountModal(parent,whId){
 
 function showSettingsModal(parent){
   const ov=el("div",{className:"fullscreen-modal",style:{position:"fixed",inset:"0",zIndex:"1000",background:"var(--bg)",display:"flex",flexDirection:"column",animation:"fadeIn .18s ease"}});
-  const close=()=>ov.remove();
-  const head=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"max(16px, env(safe-area-inset-top)) 20px 14px",borderBottom:"1px solid var(--border)",flexShrink:"0"}});
+  let closed=false;const close=()=>{if(closed)return;closed=true;ov.remove();popNav()};pushNav();
+  const head=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"max(16px, var(--safe-area-inset-top, env(safe-area-inset-top))) 20px 14px",borderBottom:"1px solid var(--border)",flexShrink:"0"}});
   const ttl=el("div");
   ttl.appendChild(el("h2",{style:{fontSize:"19px",fontWeight:"700"}},"הגדרות כלליות"));
   ttl.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)",marginTop:"2px"}},"חלות על כל המחסנים שלך"));
   const x=el("button",{className:"icon-btn",onClick:close});x.appendChild(icon("close",22));
   head.append(ttl,x);
   ov.appendChild(head);
-  const body=el("div",{style:{flex:"1",overflowY:"auto",padding:"16px 16px calc(40px + env(safe-area-inset-bottom))"}});
+  const body=el("div",{style:{flex:"1",overflowY:"auto",padding:"16px 16px calc(40px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)))"}});
   ov.appendChild(body);
 
   const section=(title,hint)=>{

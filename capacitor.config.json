@@ -1,5 +1,15 @@
 {
   "appId": "com.yosefdana.inventoryapp",
   "appName": "ניהול מלאי",
-  "webDir": "docs"
+  "webDir": "docs",
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK",
+      "insetsHandling": "css"
+    }
+  },
+  "android": {
+    "backgroundColor": "#0c0f14"
+  },
+  "backgroundColor": "#0c0f14"
 }
