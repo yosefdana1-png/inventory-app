@@ -2491,7 +2491,7 @@ function showConfirmModal(parent,title,msg,onConfirm){
 function showWarehouseSettingsModal(parent,whId,wh){
   const isAdmin=userWarehouseRole==='owner'||userWarehouseRole==='admin';
   const ov=el("div",{className:"fullscreen-modal",style:{position:"fixed",inset:"0",zIndex:"1000",background:"var(--bg)",display:"flex",flexDirection:"column",animation:"fadeIn .18s ease"}});
-  let closed=false;const close=()=>{if(closed)return;closed=true;ov.remove();popNav()};pushNav();
+  let closed=false;const close=()=>{if(closed)return;closed=true;ov.remove();popNav();if(ov.__onClose)ov.__onClose()};pushNav();
 
   const head=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"max(16px, var(--safe-area-inset-top, env(safe-area-inset-top))) 20px 14px",borderBottom:"1px solid var(--border)",flexShrink:"0"}});
   const ttl=el("div");
@@ -3215,7 +3215,7 @@ function showStockCountModal(parent,whId){
 
 function showSettingsModal(parent){
   const ov=el("div",{className:"fullscreen-modal",style:{position:"fixed",inset:"0",zIndex:"1000",background:"var(--bg)",display:"flex",flexDirection:"column",animation:"fadeIn .18s ease"}});
-  let closed=false;const close=()=>{if(closed)return;closed=true;ov.remove();popNav()};pushNav();
+  let closed=false;const close=()=>{if(closed)return;closed=true;ov.remove();popNav();if(ov.__onClose)ov.__onClose()};pushNav();
   const head=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"max(16px, var(--safe-area-inset-top, env(safe-area-inset-top))) 20px 14px",borderBottom:"1px solid var(--border)",flexShrink:"0"}});
   const ttl=el("div");
   ttl.appendChild(el("h2",{style:{fontSize:"19px",fontWeight:"700"}},"הגדרות כלליות"));
@@ -3278,6 +3278,44 @@ function showSettingsModal(parent){
   const cs=section("קטגוריות","קטגוריות הן אישיות ומסדרות את המחסנים במסך הבית.");
   linkRow(cs,"ניהול קטגוריות",()=>{close();manageCategoriesSheet()},true);
 
+  // ── מכשירים מחוברים ──
+  const dv=section("מכשירים מחוברים","כל מכשיר שהתחבר לחשבון שלך. ניתוק מוציא את המכשיר מהחשבון; כדי להתחבר שוב יצטרכו את הסיסמה.");
+  const dvList=el("div");dv.appendChild(dvList);
+  const myId=deviceId();
+  const dvUnsub=FB?FB.onValue(dbRef(`users/${currentUser.username}/devices`),snap=>{
+    const all=snap.exists()?snap.val():{};
+    dvList.innerHTML="";
+    const ids=Object.keys(all).sort((a,b)=>(a===myId?-1:b===myId?1:(all[b].lastSeen||0)-(all[a].lastSeen||0)));
+    if(!ids.length){dvList.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-muted)"}},"אין מכשירים רשומים"));return}
+    ids.forEach((id,i)=>{
+      const d=all[id]||{};const me=id===myId;
+      const row=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",padding:"10px 0",borderBottom:i===ids.length-1?"none":"1px solid var(--border)"}});
+      const info=el("div");
+      info.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500"}},(d.name||d.platform||"מכשיר")+(me?" · המכשיר הזה":"")));
+      info.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-muted)"}},[d.app,timeAgo(d.lastSeen)].filter(Boolean).join(" · ")));
+      row.appendChild(info);
+      if(!me){
+        row.appendChild(el("button",{className:"btn btn-ghost btn-sm",style:{color:"var(--danger)",borderColor:"rgba(255,92,92,.3)",fontSize:"13px",padding:"7px 14px"},onClick:async()=>{
+          const c=await showActionSheet([{label:"נתק מכשיר",style:"danger",value:"ok"}],`לנתק את "${d.name||d.platform}" מהחשבון?`);
+          if(c!=="ok")return;
+          await dbRemove(`users/${currentUser.username}/devices/${id}`).catch(()=>{});
+          showNotice("המכשיר נותק");
+        }},"נתק"));
+      }
+      dvList.appendChild(row);
+    });
+    if(ids.length>1){
+      dvList.appendChild(el("button",{className:"btn btn-ghost",style:{width:"100%",marginTop:"10px",color:"var(--danger)",borderColor:"rgba(255,92,92,.3)"},onClick:async()=>{
+        const c=await showActionSheet([{label:"נתק את כל המכשירים האחרים",style:"danger",value:"ok"}],"כל המכשירים חוץ מזה ינותקו");
+        if(c!=="ok")return;
+        const upd={};ids.forEach(id=>{if(id!==myId)upd[id]=null});
+        await dbUpdate(`users/${currentUser.username}/devices`,upd).catch(()=>{});
+        showNotice("כל המכשירים האחרים נותקו");
+      }},"נתק את כל המכשירים האחרים"));
+    }
+  }):null;
+  ov.__onClose=()=>{if(dvUnsub)dvUnsub()};
+
   // ── שיתוף ──
   const sc=section("שיתוף מחסנים");
   sc.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)",lineHeight:"1.5"}},"מחסנים משותפים מסונכרנים בזמן אמת בין כל החברים. הגדרות שיתוף והרשאות נמצאות בהגדרות של כל מחסן."));
@@ -3285,14 +3323,9 @@ function showSettingsModal(parent){
   // ── התנתקות ──
   const out=section();
   linkRow(out,"התנתק",()=>{
-    cleanup();
-    homeUnsubs.forEach(f=>f());homeUnsubs=[];
-    whCardListeners.forEach(f=>f());whCardListeners=[];
-    currentUser=null;homeScreen=null;cachedHomeContent=null;
-    currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;whCategories={};catFilter=null;catOrder=[];userPrefs={};
-    cacheClearAll();localStorage.removeItem("inv_user");
-    if(FB&&FB.auth)try{FB.signOut(FB.auth)}catch(e){}
-    close();renderAuth();
+    // Signing out on purpose also removes this device from the list.
+    if(FB)dbRemove(`users/${currentUser.username}/devices/${deviceId()}`).catch(()=>{});
+    close();doLogout();
   },true,true);
 
   document.body.appendChild(ov);
@@ -3458,6 +3491,69 @@ function init(){
   },6000);
 }
 let authReady=false;
+// ── Connected devices ──
+// Each installation gets a stable id (localStorage). While signed in it keeps
+// users/<me>/devices/<id> = {name, platform, lastSeen} alive. The settings page
+// lists these; removing another device's node makes that device sign itself
+// out the moment it sees its own entry disappear (it listens to it).
+function deviceId(){
+  try{let id=localStorage.getItem("inv_device");if(!id){id=genId()+genId();localStorage.setItem("inv_device",id)}return id}catch(e){return "d-"+navigator.userAgent.length}
+}
+function describeDevice(){
+  const ua=navigator.userAgent||"";
+  const cap=window.Capacitor&&window.Capacitor.getPlatform?window.Capacitor.getPlatform():"web";
+  let platform="דפדפן";
+  if(cap==="ios")platform=/iPad/.test(ua)||(navigator.maxTouchPoints>1&&/Mac/.test(ua))?"אייפד":"אייפון";
+  else if(cap==="android")platform="אנדרואיד";
+  else if(/iPhone/.test(ua))platform="אייפון (דפדפן)";
+  else if(/iPad/.test(ua)||(navigator.maxTouchPoints>1&&/Mac/.test(ua)))platform="אייפד (דפדפן)";
+  else if(/Android/.test(ua))platform="אנדרואיד (דפדפן)";
+  else if(/Mac/.test(ua))platform="מק";
+  else if(/Windows/.test(ua))platform="Windows";
+  const app=cap==="web"?"אתר":"אפליקציה";
+  return {platform,app};
+}
+let deviceUnsub=null,deviceRegistered=false;
+function registerDevice(){
+  if(!FB||!currentUser)return;
+  const id=deviceId(),d=describeDevice();
+  const path=`users/${currentUser.username}/devices/${id}`;
+  deviceRegistered=false;
+  dbUpdate(path,{platform:d.platform,app:d.app,lastSeen:Date.now(),name:d.platform}).then(()=>{deviceRegistered=true}).catch(()=>{});
+  if(deviceUnsub){deviceUnsub();deviceUnsub=null}
+  deviceUnsub=FB.onValue(dbRef(path),snap=>{
+    // Our own entry vanished after we wrote it → revoked from another device.
+    if(deviceRegistered&&!snap.exists()&&currentUser){
+      doLogout();
+      setTimeout(()=>showNotice("המכשיר נותק מהחשבון ממכשיר אחר"),300);
+    }
+  });
+  // Heartbeat while the app is open (every 5 min) so "last seen" stays useful.
+  if(!window.__devHb)window.__devHb=setInterval(()=>{if(FB&&currentUser)dbUpdate(`users/${currentUser.username}/devices/${deviceId()}`,{lastSeen:Date.now()}).catch(()=>{})},5*60*1000);
+}
+function doLogout(){
+  if(deviceUnsub){deviceUnsub();deviceUnsub=null}
+  deviceRegistered=false;
+  cleanup();
+  homeUnsubs.forEach(f=>f());homeUnsubs=[];
+  whCardListeners.forEach(f=>f());whCardListeners=[];
+  currentUser=null;homeScreen=null;cachedHomeContent=null;
+  currentWhIds=[];lastHomeWhIds=[];whReorderMode=false;whCategories={};catFilter=null;catOrder=[];userPrefs={};
+  cacheClearAll();localStorage.removeItem("inv_user");
+  if(FB&&FB.auth)try{FB.signOut(FB.auth)}catch(e){}
+  document.querySelectorAll('.fullscreen-modal,.modal-overlay,.action-sheet-overlay').forEach(x=>x.remove());
+  navDepth=0;
+  renderAuth();
+}
+function timeAgo(ts){
+  if(!ts)return "";
+  const m=Math.round((Date.now()-ts)/60000);
+  if(m<2)return "פעיל עכשיו";if(m<60)return `לפני ${m} דק׳`;
+  const h=Math.round(m/60);if(h<24)return `לפני ${h} שע׳`;
+  const d=Math.round(h/24);if(d<30)return `לפני ${d} ימים`;
+  return new Date(ts).toLocaleDateString("he-IL");
+}
+
 function onFirebaseReady(){
   // The screen may already show cached data (instant load). The real gate is
   // the Firebase Auth session: without one, DB access is denied by the rules,
@@ -3472,6 +3568,7 @@ function onFirebaseReady(){
     }
     authReady=true;
     if(!currentUser){renderAuth();return}
+    registerDevice();
     if(homeScreen&&cachedHomeContent){attachHomeWarehouseListener(cachedHomeContent,homeScreen)}
     else renderHome();
   });
