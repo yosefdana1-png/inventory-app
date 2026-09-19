@@ -822,6 +822,64 @@ function manageCategoriesSheet(){
     m.appendChild(el("button",{className:"btn btn-primary",style:{width:"100%",marginTop:"12px"},onClick:close},"סגור"));
   });
 }
+// ── Global search (home screen): searches every warehouse the user can see,
+// straight from the per-warehouse cache the cards already keep fresh. ──
+function buildGlobalSearch(wrap,content){
+  const sw=el("div",{id:"globalSearchWrap",style:{position:"sticky",top:"0",zIndex:"50",background:"var(--bg)",padding:"8px 16px 4px"}});
+  requestAnimationFrame(()=>{const h=wrap.querySelector('.header');if(h)sw.style.top=h.offsetHeight+"px"});
+  const row=el("div",{style:{display:"flex",gap:"8px",alignItems:"center"}});
+  const bar=el("div",{className:"search-bar",style:{flex:"1",position:"relative"}});
+  const inp=el("input",{className:"app-input",id:"globalSearchInput",placeholder:"חיפוש בכל המחסנים...",style:{paddingRight:"40px",paddingLeft:"40px"},autocapitalize:"off"});
+  const clr=el("button",{style:{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",background:"var(--border)",border:"none",borderRadius:"50%",width:"22px",height:"22px",color:"var(--text)",cursor:"pointer",display:"none",alignItems:"center",justifyContent:"center"},onClick:()=>{inp.value="";run();inp.focus()}});
+  clr.appendChild(icon("close",14));
+  const cancel=el("button",{className:"btn btn-ghost",style:{padding:"10px 14px",borderRadius:"12px",whiteSpace:"nowrap",fontSize:"13px",height:"46px",display:"none"},onClick:()=>{inp.value="";inp.blur();run();cancel.style.display="none"}},"ביטול");
+  bar.append(inp,icon("search",18),clr);row.append(bar,cancel);sw.appendChild(row);
+  const results=el("div",{id:"globalResults",style:{display:"none",padding:"8px 16px 0"}});
+  wrap.appendChild(sw);wrap.appendChild(results);
+  inp.addEventListener("focus",()=>{cancel.style.display="flex"});
+  inp.addEventListener("blur",()=>{if(!inp.value)setTimeout(()=>{cancel.style.display="none"},150)});
+  inp.addEventListener("input",run);
+  inp.addEventListener("keydown",e=>{if(e.key==="Escape")cancel.click()});
+  function run(){
+    const q=inp.value.trim().toLowerCase();
+    clr.style.display=q?"flex":"none";
+    if(!q){results.style.display="none";content.style.display="";return}
+    content.style.display="none";results.style.display="";results.innerHTML="";
+    let total=0;const MAX=60;
+    lastHomeWhIds.forEach(whId=>{
+      if(total>=MAX)return;
+      const wh=cacheGet(`warehouses/${whId}`);if(!wh||!wh.items)return;
+      const hits=Object.entries(wh.items).filter(([,it])=>(it.name||"").toLowerCase().includes(q)||(it.sku&&String(it.sku).toLowerCase().includes(q))||(it.note&&it.note.toLowerCase().includes(q)));
+      if(!hits.length)return;
+      hits.sort((a,b)=>(a[1].name||"").localeCompare(b[1].name||"","he"));
+      const group=el("div",{style:{marginBottom:"14px"}});
+      const head=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 4px",cursor:"pointer"},onClick:()=>{inp.blur();renderListDetail(whId)}});
+      head.appendChild(el("div",{style:{fontSize:"13px",fontWeight:"700",color:"var(--text-sec)"}},wh.name));
+      head.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-muted)"}},`${hits.length} פריטים`));
+      group.appendChild(head);
+      const showSku=userPrefs.showSku!==false&&whFeatOn(wh.features,'showSku');
+      const lowOn=userPrefs.showLowStock!==false&&whFeatOn(wh.features,'showLowStock');
+      hits.forEach(([itemId,it])=>{
+        if(total>=MAX)return;total++;
+        const q0=it.quantity||0;
+        const rowEl=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",padding:"11px 14px",background:"var(--card)",border:"1px solid var(--border)",borderRadius:"12px",marginBottom:"6px",cursor:"pointer"},onClick:()=>{pendingSearch=inp.value.trim();inp.blur();renderListDetail(whId)}});
+        const info=el("div",{style:{minWidth:"0"}});
+        info.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"500",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},it.name||""));
+        const sub=[];if(showSku&&it.sku)sub.push(`מק"ט: ${it.sku}`);if(it.note)sub.push(it.note);
+        if(sub.length)info.appendChild(el("div",{style:{fontSize:"11px",color:"var(--text-muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},sub.join(" · ")));
+        const right=el("div",{style:{display:"flex",alignItems:"center",gap:"8px",flexShrink:"0"}});
+        const low=lowOn&&(q0===0||(it.lowStock&&q0<=it.lowStock));
+        if(low)right.appendChild(el("span",{style:{fontSize:"10px",fontWeight:"600",padding:"2px 8px",borderRadius:"8px",background:q0===0?"var(--danger-bg)":"var(--warning-bg)",color:q0===0?"var(--danger)":"var(--warning)"}},q0===0?"אזל":"מלאי נמוך"));
+        right.appendChild(el("span",{style:{fontSize:"18px",fontWeight:"700",color:q0===0?"var(--danger)":low?"var(--warning)":"var(--accent)"}},String(q0)));
+        rowEl.append(info,right);group.appendChild(rowEl);
+      });
+      results.appendChild(group);
+    });
+    if(!total)results.appendChild(el("div",{className:"empty-state"},`לא נמצאו פריטים עבור "${inp.value.trim()}"`));
+    else if(total>=MAX)results.appendChild(el("div",{style:{textAlign:"center",fontSize:"12px",color:"var(--text-muted)",padding:"6px"}},"מוצגות 60 התוצאות הראשונות — דייק את החיפוש"));
+  }
+}
+
 function renderCatChips(){
   const c=cachedHomeContent;if(!c)return;
   let bar=c.querySelector('#catChips');
@@ -913,7 +971,9 @@ function renderHome(){
   const sb=el("button",{className:"icon-btn",onClick:()=>showSettingsModal(wrap)});
   sb.appendChild(icon("settings",20));
   hl.append(rb,sortWhBtn,sb);header.append(hr,hl);wrap.appendChild(header);
-  const content=el("div",{style:{padding:"16px 16px 0"}});wrap.appendChild(content);
+  const content=el("div",{style:{padding:"16px 16px 0"}});
+  buildGlobalSearch(wrap,content);
+  wrap.appendChild(content);
   const fab=el("button",{className:"fab",onClick:()=>showNewListModal(wrap)});
   fab.appendChild(icon("plus",24));wrap.appendChild(fab);
   cachedHomeContent=content;
@@ -1302,6 +1362,7 @@ function buildWarehouseCard(cardWrapper,whId,wh,wrap){
 // ═══════════ LIST DETAIL ═══════════
 let currentSort="alpha"; // alpha, manual
 let searchQuery="";
+let pendingSearch=null; // set by the global search: pre-filled into the warehouse screen that opens
 let reorderMode=false;
 let lowFilter=false; // "show only low/out-of-stock" toggle (per screen visit)
 let currentItems=[];
@@ -1330,7 +1391,7 @@ function memberCan(action){
 
 function renderListDetail(whId){
   if(isWide()&&isShowingDetail&&currentWhId===whId&&!document.querySelector('.modal-overlay'))return;
-  cleanup();currentSort="manual";searchQuery="";reorderMode=false;lowFilter=false;userWarehouseRole='member';currentWhData=null;
+  cleanup();currentSort="manual";searchQuery=pendingSearch||"";pendingSearch=null;reorderMode=false;lowFilter=false;userWarehouseRole='member';currentWhData=null;
   const wrap=el("div",{className:"screen",style:{paddingBottom:"calc(100px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)))"}});
   const header=el("div",{className:"header"});
   const hr=el("div",{style:{display:"flex",alignItems:"center",gap:"12px"}});
@@ -1408,12 +1469,14 @@ function renderItemsView(c,whId,items,wrap){
     searchInput.addEventListener("input",e=>{searchQuery=e.target.value;clearBtn.style.display=searchQuery?"flex":"none";renderItemsList(c,currentWhId,currentItems,wrap)});
     searchInput.addEventListener("focus",()=>{closeBtn.style.display="flex"});
     searchInput.addEventListener("blur",()=>{if(!searchQuery)setTimeout(()=>{closeBtn.style.display="none"},150)});
+    if(searchQuery)searchInput.value=searchQuery;
     searchBar.appendChild(searchInput);
     const searchIcon=icon("search",18);searchBar.appendChild(searchIcon);
     const clearBtn=el("button",{id:"searchClear",style:{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",background:"var(--border)",border:"none",borderRadius:"50%",width:"22px",height:"22px",color:"var(--text)",cursor:"pointer",display:"none",alignItems:"center",justifyContent:"center",padding:"0"},onClick:()=>{
       searchInput.value="";searchQuery="";clearBtn.style.display="none";searchInput.focus();renderItemsList(c,currentWhId,currentItems,wrap);
     }});
     clearBtn.appendChild(icon("close",14));
+    if(searchQuery)clearBtn.style.display="flex";
     searchBar.appendChild(clearBtn);
     searchRow.appendChild(searchBar);
     searchRow.appendChild(closeBtn);
