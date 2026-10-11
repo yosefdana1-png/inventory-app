@@ -3316,6 +3316,14 @@ function showSettingsModal(parent){
   }):null;
   ov.__onClose=()=>{if(dvUnsub)dvUnsub()};
 
+  // ── אודות ──
+  const ab=section("אודות");
+  const openExt=u=>{try{window.open(u,"_blank")}catch(e){location.href=u}};
+  linkRow(ab,"מדיניות פרטיות",()=>openExt("https://yosefdana1-png.github.io/inventory/privacy.html"));
+  linkRow(ab,"תמיכה ויצירת קשר",()=>openExt("https://yosefdana1-png.github.io/inventory-app/support.html"));
+  linkRow(ab,"מחיקת חשבון",()=>openExt("https://yosefdana1-png.github.io/inventory-app/delete-account.html"));
+  ab.appendChild(el("div",{style:{fontSize:"12px",color:"var(--text-muted)",padding:"10px 0 2px"}},"מלאי · Dana Studio · גרסה 1.2"));
+
   // ── שיתוף ──
   const sc=section("שיתוף מחסנים");
   sc.appendChild(el("div",{style:{fontSize:"13px",color:"var(--text-sec)",lineHeight:"1.5"}},"מחסנים משותפים מסונכרנים בזמן אמת בין כל החברים. הגדרות שיתוף והרשאות נמצאות בהגדרות של כל מחסן."));
