@@ -1,0 +1,16 @@
+אייקון זהב (הצעה A), מוכן לכל המצבים. עדיין לא הוכנס לאפליקציה.
+
+master/                 קובץ המקור (PNG 1024 ו-SVG)
+ios/AppIcon.appiconset  תיקיית אייקון מוכנה ל-Xcode: רגיל, כהה, צבוע (Tinted). מצב שקוף (Clear) נוצר אוטומטית מהגרסה הצבועה.
+ios/icon-composer-layers  שלושת הפסים כשכבות נפרדות, לאופציה של Icon Composer (אפקט Liquid Glass מלא). לא חובה.
+android/res             כל הגדלים לאנדרואיד: אייקון מסתגל, עגול, וגרסה חד-צבעית לערכות נושא (Android 13 ומעלה). צבע הרקע: ‎#0F1012.
+web/                    האייקונים לאתר: icon-192, icon-512, apple-touch-icon
+store/                  1024 ל-App Store ו-512 ל-Google Play
+icon-all-modes-preview.png  איך האייקון נראה בכל מצב
+
+כשתאשר, הקבצים יוחלפו במקומות הבאים בפרויקט:
+ios/App/App/Assets.xcassets/AppIcon.appiconset
+android/app/src/main/res (mipmap-* ו-values/ic_launcher_background.xml)
+docs (icon-192.png, icon-512.png, apple-touch-icon.png)
+branding/icon-master-1024.png
+אחרי ההחלפה צריך build חדש ל-iOS ולאנדרואיד.

@@ -1,0 +1,34 @@
+{
+  "fill" : {
+    "solid" : "srgb:0.05882,0.06275,0.07059,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "3-top-gold.svg",
+          "name" : "3-top-gold"
+        },
+        {
+          "image-name" : "2-middle-white.svg",
+          "name" : "2-middle-white"
+        },
+        {
+          "image-name" : "1-bottom-grey.svg",
+          "name" : "1-bottom-grey"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

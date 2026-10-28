@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -16,7 +16,35 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		C3442FBA308A2CD0004CD062 /* WatchLinkPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3442FB9308A2CD0004CD062 /* WatchLinkPlugin.swift */; };
+		C3442FBC308A2CD2004CD062 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3442FBB308A2CD2004CD062 /* MainViewController.swift */; };
+		C372020230890B37000D3F43 /* Inventory Watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = C37201F830890B36000D3F43 /* Inventory Watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C3A31E2C307FFE1E00ED287E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = C3A31E2B307FFE1E00ED287E /* AppIcon.icon */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C372020030890B37000D3F43 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C37201F730890B36000D3F43;
+			remoteInfo = "Inventory Watch Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C372020330890B37000D3F43 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				C372020230890B37000D3F43 /* Inventory Watch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
@@ -30,7 +58,15 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		C3442FB9308A2CD0004CD062 /* WatchLinkPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLinkPlugin.swift; sourceTree = "<group>"; };
+		C3442FBB308A2CD2004CD062 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
+		C37201F830890B36000D3F43 /* Inventory Watch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Inventory Watch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C3A31E2B307FFE1E00ED287E /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		C37201F930890B36000D3F43 /* Inventory Watch Watch App */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Inventory Watch Watch App"; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		504EC3011FED79650016851F /* Frameworks */ = {
@@ -38,6 +74,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C37201F530890B36000D3F43 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -49,6 +92,8 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				C3A31E2B307FFE1E00ED287E /* AppIcon.icon */,
+				C37201F930890B36000D3F43 /* Inventory Watch Watch App */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -57,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				C37201F830890B36000D3F43 /* Inventory Watch Watch App.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -73,6 +119,8 @@
 				504EC3131FED79650016851F /* Info.plist */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
+				C3442FB9308A2CD0004CD062 /* WatchLinkPlugin.swift */,
+				C3442FBB308A2CD2004CD062 /* MainViewController.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -87,10 +135,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				C372020330890B37000D3F43 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C372020130890B37000D3F43 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -100,19 +150,45 @@
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C37201F730890B36000D3F43 /* Inventory Watch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C372020630890B37000D3F43 /* Build configuration list for PBXNativeTarget "Inventory Watch Watch App" */;
+			buildPhases = (
+				C37201F430890B36000D3F43 /* Sources */,
+				C37201F530890B36000D3F43 /* Frameworks */,
+				C37201F630890B36000D3F43 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C37201F930890B36000D3F43 /* Inventory Watch Watch App */,
+			);
+			name = "Inventory Watch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "Inventory Watch Watch App";
+			productReference = C37201F830890B36000D3F43 /* Inventory Watch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
 		504EC2FC1FED79650016851F /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastSwiftUpdateCheck = 0920;
-				LastUpgradeCheck = 0920;
+				BuildIndependentTargetsInParallel = YES;
+				LastSwiftUpdateCheck = 2710;
+				LastUpgradeCheck = 2710;
 				TargetAttributes = {
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
 						ProvisioningStyle = Automatic;
+					};
+					C37201F730890B36000D3F43 = {
+						CreatedOnToolsVersion = 27.1;
 					};
 				};
 			};
@@ -133,6 +209,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				C37201F730890B36000D3F43 /* Inventory Watch Watch App */,
 			);
 		};
 /* End PBXProject section */
@@ -145,9 +222,17 @@
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
+				C3A31E2C307FFE1E00ED287E /* AppIcon.icon in Resources */,
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C37201F630890B36000D3F43 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -158,12 +243,29 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C3442FBA308A2CD0004CD062 /* WatchLinkPlugin.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
+				C3442FBC308A2CD2004CD062 /* MainViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C37201F430890B36000D3F43 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C372020130890B37000D3F43 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C37201F730890B36000D3F43 /* Inventory Watch Watch App */;
+			targetProxy = C372020030890B37000D3F43 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -200,6 +302,7 @@
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
@@ -207,8 +310,10 @@
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -218,6 +323,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = M38L3AN624;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -238,6 +344,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -257,6 +364,7 @@
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
@@ -264,8 +372,10 @@
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -275,6 +385,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = M38L3AN624;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -288,6 +399,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				VALIDATE_PRODUCT = YES;
@@ -300,15 +412,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = M38L3AN624;
+				CURRENT_PROJECT_VERSION = 5;
 				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.3;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.yosefdana.inventoryapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -323,20 +434,109 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = M38L3AN624;
+				CURRENT_PROJECT_VERSION = 5;
 				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yosefdana.inventoryapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		C372020430890B37000D3F43 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "מלאי";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.yosefdana.inventoryapp;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.3;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yosefdana.inventoryapp.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		C372020530890B37000D3F43 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "מלאי";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.yosefdana.inventoryapp;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.3;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yosefdana.inventoryapp.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Release;
 		};
@@ -357,6 +557,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C372020630890B37000D3F43 /* Build configuration list for PBXNativeTarget "Inventory Watch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C372020430890B37000D3F43 /* Debug */,
+				C372020530890B37000D3F43 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
